@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ivory OS",
     "slug": "ivory-os",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -31,7 +31,16 @@
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
-    ]
+      "expo-router",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "3bbff79e-34a0-4001-aec1-208059ec34e7"
+      }
+    }
   }
 }
