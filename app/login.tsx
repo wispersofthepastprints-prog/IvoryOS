@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter } from "expo-router";
-import { signInWithEmail, signUpWithEmail } from "../lib/supabase";
+import { signInWithEmail, signUpWithEmail, supabase } from "../lib/supabase";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -24,6 +24,21 @@ export default function LoginScreen() {
       Alert.alert("Error", error.message);
     } else {
       router.replace("/");
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert("Enter your email", "Type your email above first, then tap Forgot Password.");
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "https://ewqbywvhgujwkqnxvuqi.supabase.co",
+    });
+    if (error) {
+      Alert.alert("Error", error.message);
+    } else {
+      Alert.alert("Check your email", "Password reset link sent!");
     }
   };
 
@@ -73,6 +88,10 @@ export default function LoginScreen() {
           </Text>
         </TouchableOpacity>
 
+        <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotButton}>
+          <Text style={styles.forgotText}>Forgot Password?</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
           <Text style={styles.toggleText}>
             {isLogin ? "New? Start Free Trial" : "Already have an account? Login"}
@@ -102,5 +121,15 @@ const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.6 },
   mainButtonText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700" },
+  forgotButton: {
+    alignItems: "center",
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  forgotText: {
+    color: "#2563EB",
+    fontSize: 14,
+    fontWeight: "600",
+  },
   toggleText: { textAlign: "center", color: "#666", marginTop: 20, fontSize: 14 },
 });
