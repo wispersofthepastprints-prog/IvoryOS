@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ivory OS",
     "slug": "ivory-os",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -20,7 +20,7 @@
       "bundleIdentifier": "com.wispersofthepast.ivoryos"
     },
      "android": {
-      "versionCode": 2,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F8F6F0"
@@ -31,17 +31,14 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": [
+     "plugins": [
       "expo-router",
       "expo-web-browser"
-    ],
-    "extra": {
-      "router": {
-        "origin": false
-      },
+	],
+      "extra": {
       "eas": {
-        "projectId": "3bbff79e-34a0-4001-aec1-208059ec34e7"
-      }
-    }
+     "projectId": "3bbff79e-34a0-4001-aec1-208059ec34e7"
+  }
+}
   }
 }
