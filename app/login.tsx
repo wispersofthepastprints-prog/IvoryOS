@@ -27,18 +27,32 @@ export default function LoginScreen() {
     }
   };
 
+  const [forgotLoading, setForgotLoading] = useState(false);
+
   const handleForgotPassword = async () => {
     if (!email) {
       Alert.alert("Enter your email", "Type your email above first, then tap Forgot Password.");
       return;
     }
+    if (forgotLoading) {
+      Alert.alert("Please wait", "Check your email first. If you don't see it, wait 1 hour before trying again.");
+      return;
+    }
+    
+    setForgotLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: "https://ewqbywvhgujwkqnxvuqi.supabase.co",
     });
+    setForgotLoading(false);
+    
     if (error) {
-      Alert.alert("Error", error.message);
+      if (error.message.includes("rate limit") || error.message.includes("security")) {
+        Alert.alert("Too many attempts", "Please wait 1 hour before trying again. This protects your account from spam.");
+      } else {
+        Alert.alert("Error", error.message);
+      }
     } else {
-      Alert.alert("Check your email", "Password reset link sent!");
+      Alert.alert("Check your email", "Password reset link sent! If you don't see it, check your spam folder.");
     }
   };
 
@@ -88,8 +102,14 @@ export default function LoginScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotButton}>
-          <Text style={styles.forgotText}>Forgot Password?</Text>
+        <TouchableOpacity 
+          onPress={handleForgotPassword} 
+          style={styles.forgotButton}
+          disabled={forgotLoading}
+        >
+          <Text style={[styles.forgotText, forgotLoading && { color: "#999" }]}>
+            {forgotLoading ? "Reset link sent — check email" : "Forgot Password?"}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
