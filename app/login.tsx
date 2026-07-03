@@ -41,7 +41,7 @@ export default function LoginScreen() {
     
     setForgotLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://ewqbywvhgujwkqnxvuqi.supabase.co",
+      redirectTo: "https://wispersofthepastprints-prog.github.io/IvoryOS/reset-password.html",
     });
     setForgotLoading(false);
     
