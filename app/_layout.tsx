@@ -4,7 +4,7 @@ import { supabase, getCurrentUser } from "../lib/supabase";
 import { View, ActivityIndicator } from "react-native";
 
 export default function RootLayout() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<any>(true);
   const [session, setSession] = useState<any>(null);
   const router = useRouter();
 
@@ -45,6 +45,12 @@ export default function RootLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
       <Stack.Screen name="clients/index" />
+      <Stack.Screen name="clients/new" />
+      <Stack.Screen name="clients/[id]" />
+      <Stack.Screen name="bookings/index" />
+      <Stack.Screen name="bookings/new" />
+      <Stack.Screen name="bookings/[id]" />
+      <Stack.Screen name="settings/index" />
     </Stack>
   );
 }

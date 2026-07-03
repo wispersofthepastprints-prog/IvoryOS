@@ -10,19 +10,23 @@ export default function DashboardScreen() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
 
   useEffect(() => { fetchDashboardData(); }, []);
 
   const fetchDashboardData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return;
 
-      const { data: profile } = await supabase
+      const { data: profileData } = await supabase
         .from("photographers")
-        .select("id")
+        .select("id, full_name")
         .eq("auth_id", user.id)
         .single();
+      
+      setProfile(profileData);
 
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
@@ -108,8 +112,10 @@ export default function DashboardScreen() {
     <ScrollView style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Hi, Geoff 👋</Text>
-        <TouchableOpacity><Text style={styles.settings}>⚙️</Text></TouchableOpacity>
+        <Text style={styles.greeting}>Hi, {profile?.full_name?.split(" ")[0] || "Photographer"} 👋</Text>
+        <TouchableOpacity onPress={() => router.push("/settings")}>
+          <Text style={styles.settings}>⚙️</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.revenueCard}>
@@ -119,22 +125,23 @@ export default function DashboardScreen() {
       </View>
 
       {data?.upcomingBooking && (
-        <View style={styles.upcomingCard}>
+        <TouchableOpacity 
+          style={styles.upcomingCard}
+          onPress={() => router.push(`/bookings/${data.upcomingBooking.id}`)}
+        >
           <Text style={styles.sectionLabel}>UPCOMING</Text>
           <Text style={styles.upcomingTitle}>{data.upcomingBooking.title}</Text>
           <Text style={styles.upcomingDetail}>📅 {formatDate(data.upcomingBooking.event_date)}</Text>
           <Text style={styles.upcomingDetail}>📍 {data.upcomingBooking.event_location || "Location TBA"}</Text>
-          <TouchableOpacity style={styles.shotListButton}>
-            <Text style={styles.shotListText}>View Shot List →</Text>
-          </TouchableOpacity>
-        </View>
+          <Text style={styles.shotListText}>View Booking →</Text>
+        </TouchableOpacity>
       )}
 
       <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
       <View style={styles.actionsRow}>
-        <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/clients")} />
-        <QuickActionButton icon="💰" label="Send Invoice" onPress={() => {}} />
-        <QuickActionButton icon="👤" label="Find 2nd" onPress={() => {}} />
+        <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/bookings/new")} />
+        <QuickActionButton icon="👤" label="New Client" onPress={() => router.push("/clients/new")} />
+        <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/bookings")} />
       </View>
 
       {data?.pendingActions && data.pendingActions.length > 0 && (
@@ -153,21 +160,21 @@ export default function DashboardScreen() {
       )}
 
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>🏠</Text>
-          <Text style={styles.navLabelActive}>Dashboard</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/settings")}>
+          <Text style={styles.navIcon}>⚙️</Text>
+          <Text style={styles.navLabel}>Settings</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/clients")}>
           <Text style={styles.navIcon}>👥</Text>
           <Text style={styles.navLabel}>Clients</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/bookings")}>
           <Text style={styles.navIcon}>📋</Text>
           <Text style={styles.navLabel}>Bookings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem}>
-          <Text style={styles.navIcon}>⋯</Text>
-          <Text style={styles.navLabel}>More</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/bookings")}>
+          <Text style={styles.navIcon}>💰</Text>
+          <Text style={styles.navLabel}>Invoices</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -188,8 +195,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 12, fontWeight: "700", color: "#999", letterSpacing: 1, marginHorizontal: 24, marginBottom: 12, marginTop: 8 },
   upcomingTitle: { fontSize: 18, fontWeight: "700", color: "#0A0A0A", marginBottom: 8 },
   upcomingDetail: { fontSize: 14, color: "#666", marginBottom: 4 },
-  shotListButton: { marginTop: 12, alignSelf: "flex-start" },
-  shotListText: { color: "#C9A227", fontWeight: "600", fontSize: 14 },
+  shotListText: { color: "#C9A227", fontWeight: "600", fontSize: 14, marginTop: 8 },
   actionsRow: { flexDirection: "row", justifyContent: "space-around", paddingHorizontal: 24, marginBottom: 24 },
   pendingItem: { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: 24, padding: 16, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: "#FEE2E2" },
   pendingIcon: { fontSize: 20, marginRight: 12 },

@@ -25,7 +25,7 @@ export default function ClientsScreen() {
   );
 
   const renderClient = ({ item }: { item: Client }) => (
-    <TouchableOpacity style={styles.clientCard}>
+    <TouchableOpacity style={styles.clientCard} onPress={() => router.push(`/clients/${item.id}`)}>
       <View style={styles.clientInfo}>
         <Text style={styles.clientName}>{item.full_name}</Text>
         <Text style={styles.clientDetail}>{item.email}</Text>
@@ -39,7 +39,9 @@ export default function ClientsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Clients</Text>
-        <TouchableOpacity style={styles.addButton}><Text style={styles.addText}>+</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.addButton} onPress={() => router.push("/clients/new")}>
+          <Text style={styles.addText}>+</Text>
+        </TouchableOpacity>
       </View>
       <TextInput style={styles.search} placeholder="Search clients..." placeholderTextColor="#999" value={search} onChangeText={setSearch} />
       <FlatList data={filteredClients} renderItem={renderClient} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} />
@@ -60,4 +62,4 @@ const styles = StyleSheet.create({
   clientName: { fontSize: 16, fontWeight: "600", color: "#0A0A0A", marginBottom: 4 },
   clientDetail: { fontSize: 13, color: "#666" },
   arrow: { fontSize: 18, color: "#C9A227" },
-});
+})

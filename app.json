@@ -19,7 +19,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.wispersofthepast.ivoryos"
     },
-     "android": {
+    "android": {
       "versionCode": 6,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -31,14 +31,15 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-     "plugins": [
+    "plugins": [
       "expo-router",
-      "expo-web-browser"
-	],
-      "extra": {
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
       "eas": {
-     "projectId": "3bbff79e-34a0-4001-aec1-208059ec34e7"
-  }
-}
+        "projectId": "3bbff79e-34a0-4001-aec1-208059ec34e7"
+      }
+    }
   }
 }

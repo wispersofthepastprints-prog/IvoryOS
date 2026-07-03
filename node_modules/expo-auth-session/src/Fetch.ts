@@ -14,10 +14,12 @@ export type FetchRequest = {
 export async function requestAsync<T>(requestUrl: string, fetchRequest: FetchRequest): Promise<T> {
   const url = new URL(requestUrl);
 
-  const request: Omit<RequestInit, 'headers'> & { headers: HeadersInit } = {
+  const headers: Record<string, string> = {};
+  const request: RequestInit = {
+    body: undefined,
     method: fetchRequest.method,
     mode: 'cors',
-    headers: {},
+    headers,
   };
 
   const isJsonDataType = fetchRequest.dataType?.toLowerCase() === 'json';
@@ -25,7 +27,11 @@ export async function requestAsync<T>(requestUrl: string, fetchRequest: FetchReq
   if (fetchRequest.headers) {
     for (const i in fetchRequest.headers) {
       if (i in fetchRequest.headers) {
-        request.headers[i] = fetchRequest.headers[i] as string;
+        const header = fetchRequest.headers[i];
+
+        if (header != null) {
+          headers[i] = header;
+        }
       }
     }
   }
@@ -34,15 +40,15 @@ export async function requestAsync<T>(requestUrl: string, fetchRequest: FetchReq
     if (fetchRequest.method?.toUpperCase() === 'POST') {
       request.body = new URLSearchParams(fetchRequest.body).toString();
     } else {
-      for (const key of Object.keys(fetchRequest.body)) {
-        url.searchParams.append(key, fetchRequest.body[key]);
+      for (const [key, value] of Object.entries(fetchRequest.body)) {
+        url.searchParams.append(key, value);
       }
     }
   }
 
-  if (isJsonDataType && !('Accept' in request.headers)) {
+  if (isJsonDataType && !headers.Accept && !headers.accept) {
     // NOTE: Github authentication will return XML if this includes the standard `*/*`
-    request.headers['Accept'] = 'application/json, text/javascript; q=0.01';
+    headers['Accept'] = 'application/json, text/javascript; q=0.01';
   }
 
   // Fix a problem with React Native `URL` causing a trailing slash to be added.

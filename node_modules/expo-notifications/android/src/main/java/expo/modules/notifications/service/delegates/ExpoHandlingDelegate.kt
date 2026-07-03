@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import expo.modules.notifications.notifications.NotificationManager
+import expo.modules.notifications.notifications.NotificationSerializer
 import expo.modules.notifications.notifications.model.Notification
 import expo.modules.notifications.notifications.model.NotificationResponse
 import expo.modules.notifications.service.NotificationForwarderActivity
@@ -45,12 +46,10 @@ class ExpoHandlingDelegate(protected val context: Context) : HandlingDelegate {
       }
 
       sListenersReferences[listener] = WeakReference(listener)
-      if (sPendingNotificationResponses.isNotEmpty()) {
-        val responseIterator = sPendingNotificationResponses.iterator()
-        while (responseIterator.hasNext()) {
-          listener.onNotificationResponseReceived(responseIterator.next())
-          responseIterator.remove()
-        }
+      val responseIterator = sPendingNotificationResponses.iterator()
+      while (responseIterator.hasNext()) {
+        listener.onNotificationResponseReceived(responseIterator.next())
+        responseIterator.remove()
       }
     }
 
@@ -60,7 +59,7 @@ class ExpoHandlingDelegate(protected val context: Context) : HandlingDelegate {
      *   - the foreground main Activity
      *   - the background [NotificationForwarderActivity] Activity that send notification clicked events through broadcast
      */
-    fun createPendingIntentForOpeningApp(context: Context, broadcastIntent: Intent, notificationResponse: NotificationResponse): PendingIntent {
+    fun createPendingIntentForOpeningApp(context: Context, broadcastIntent: Intent): PendingIntent {
       var intentFlags = PendingIntent.FLAG_UPDATE_CURRENT
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         // The intent may include `RemoteInput` from `TextInputNotificationAction`.
@@ -107,7 +106,7 @@ class ExpoHandlingDelegate(protected val context: Context) : HandlingDelegate {
 
   override fun handleNotification(notification: Notification) {
     /**
-     * The app is in background, only data-only notifications reach this point.
+     * When the app is in background, only data-only notifications reach this point.
      * We do not inform JS about those. If JS wants to respond to data-only notifications,
      * it needs to happen via expo-task-manager: https://docs.expo.dev/versions/latest/sdk/notifications/#background-notifications
      * */
@@ -120,8 +119,10 @@ class ExpoHandlingDelegate(protected val context: Context) : HandlingDelegate {
         it.onNotificationReceived(notification)
       }
     } else if (notification.shouldPresent()) {
-      // TODO vonovak remove this - this branch doesn't seem to execute at all
-      // because only data-only notifications reach this point and they are not presented
+      // only data-only notifications reach this point and we present them if they fall into the documented exception:
+      // https://docs.expo.dev/push-notifications/what-you-need-to-know/#headless-background-notifications
+      // this call can not be triggered by expo push service, only when using FCM directly.
+      // We keep this because we used to document this as a valid use case.
       NotificationsService.present(context, notification)
     }
   }
@@ -139,6 +140,22 @@ class ExpoHandlingDelegate(protected val context: Context) : HandlingDelegate {
     if (notificationResponse.action.opensAppToForeground()) {
       openAppToForeground(context, notificationResponse)
     }
+
+    // Run background tasks only for custom notification action buttons (not the default tap).
+    // When the default notification tap launches the app from killed state, calling
+    // runTaskManagerTasks starts a headless React instance that races with the foreground app.
+    // The foreground TaskManager gets misclassified as headless (via isStartedByHeadlessLoader),
+    // then wiped by invalidateAppRecord — breaking all subsequent background task execution.
+    if (!isAppInForeground() && notificationResponse.actionIdentifier != NotificationResponse.DEFAULT_ACTION_IDENTIFIER) {
+      FirebaseMessagingDelegate.runTaskManagerTasks(
+        context.applicationContext,
+        NotificationSerializer.toBundle(notificationResponse)
+      )
+    }
+
+    // NOTE the listeners are not set up when the app is killed
+    // and is launched in response to tapping a notification button
+    // this code is a noop in that case
     val listeners = getListeners()
     if (listeners.isEmpty()) {
       sPendingNotificationResponses.add(notificationResponse)

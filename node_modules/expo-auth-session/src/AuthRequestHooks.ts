@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useEffect, useState } from 'react';
 
 import { AuthRequest } from './AuthRequest';
-import { AuthRequestConfig, AuthRequestPromptOptions, Prompt } from './AuthRequest.types';
-import { AuthSessionResult } from './AuthSession.types';
-import { DiscoveryDocument, IssuerOrDiscovery, resolveDiscoveryAsync } from './Discovery';
+import type { AuthRequestConfig, AuthRequestPromptOptions, Prompt } from './AuthRequest.types';
+import type { AuthSessionResult } from './AuthSession.types';
+import type { DiscoveryDocument, IssuerOrDiscovery } from './Discovery';
+import { resolveDiscoveryAsync } from './Discovery';
 
 // @needsAudit
 /**
@@ -131,7 +132,7 @@ export function useAuthRequestResult(
  * Load an authorization request for a code. When the prompt method completes then the response will be fulfilled.
  *
  * > In order to close the popup window on web, you need to invoke `WebBrowser.maybeCompleteAuthSession()`.
- * > See the [Identity example](/guides/authentication#identityserver-4) for more info.
+ * > See the [GitHub example](/guides/authentication#github) for more info.
  *
  * If an Implicit grant flow was used, you can pass the `response.params` to `TokenResponse.fromQueryParams()`
  * to get a `TokenResponse` instance which you can use to easily refresh the token.
