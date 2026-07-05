@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IvoryOS - Verify Email</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+      background: #F8F6F0; 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      min-height: 100vh; 
+      margin: 0; 
+      padding: 20px;
+    }
+    .container { 
+      background: white; 
+      padding: 40px; 
+      border-radius: 20px; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1); 
+      width: 100%; 
+      max-width: 400px; 
+      text-align: center; 
+    }
+    h1 { color: #0A0A0A; margin-bottom: 8px; font-size: 24px; }
+    p { color: #666; margin-bottom: 24px; font-size: 14px; }
+    button { 
+      width: 100%; 
+      padding: 18px; 
+      background: #C9A227; 
+      color: #0A0A0A; 
+      border: none; 
+      border-radius: 12px; 
+      font-size: 16px; 
+      font-weight: 700; 
+      cursor: pointer; 
+      margin-top: 16px;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .message { 
+      margin-top: 16px; 
+      padding: 12px; 
+      border-radius: 8px; 
+      font-size: 14px; 
+    }
+    .success { background: #DCFCE7; color: #166534; }
+    .error { background: #FEE2E2; color: #991B1B; }
+    .info { background: #EFF6FF; color: #1E40AF; }
+    .logo { font-size: 32px; margin-bottom: 8px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">&#9671;</div>
+    <h1>Verify Your Email</h1>
+    <p>IvoryOS Account</p>
+
+    <div id="statusMsg" class="message info">
+      Verifying your email...
+    </div>
+
+    <div id="resultMsg" class="message hidden"></div>
+
+    <button id="openAppBtn" onclick="openApp()" class="hidden">Open IvoryOS App</button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.1/dist/umd/supabase.min.js"></script>
+
+  <script>
+    const SUPABASE_URL = 'https://ewqbywvhgujwkqnxvuqi.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV3cWJ5d3ZoZ3Vqd2txbnh2dXFpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5NTY3NzMsImV4cCI6MjA5NzUzMjc3M30.lO9JTL4lY1pUm362VgjIIPCVqbR8rSymYx6WD3Swu3o';
+
+    let supabase = null;
+    const statusMsg = document.getElementById('statusMsg');
+    const resultMsg = document.getElementById('resultMsg');
+    const openAppBtn = document.getElementById('openAppBtn');
+
+    function showError(text) {
+      resultMsg.className = 'message error';
+      resultMsg.textContent = text;
+      resultMsg.classList.remove('hidden');
+    }
+
+    function showSuccess(text) {
+      resultMsg.className = 'message success';
+      resultMsg.textContent = text;
+      resultMsg.classList.remove('hidden');
+    }
+
+    function hideStatus() {
+      statusMsg.classList.add('hidden');
+    }
+
+    function showOpenAppButton() {
+      openAppBtn.classList.remove('hidden');
+    }
+
+    function getQueryParams() {
+      const query = window.location.search;
+      if (!query || query.length < 2) return {};
+
+      const params = {};
+      const pairs = query.substring(1).split('&');
+      for (const pair of pairs) {
+        const [key, value] = pair.split('=');
+        if (key && value) {
+          params[decodeURIComponent(key)] = decodeURIComponent(value);
+        }
+      }
+      return params;
+    }
+
+    function getHashParams() {
+      const hash = window.location.hash;
+      if (!hash || hash.length < 2) return {};
+
+      const params = {};
+      const pairs = hash.substring(1).split('&');
+      for (const pair of pairs) {
+        const [key, value] = pair.split('=');
+        if (key && value) {
+          params[decodeURIComponent(key)] = decodeURIComponent(value);
+        }
+      }
+      return params;
+    }
+
+    function openApp() {
+      // Try to open the app using a deep link
+      // Replace with your actual app scheme
+      window.location.href = 'ivoryos://login';
+
+      // Fallback: show message if app doesn't open
+      setTimeout(function() {
+        showSuccess('If the app did not open, please open it manually and log in.');
+      }, 2000);
+    }
+
+    async function init() {
+      try {
+        if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
+          throw new Error('Supabase library failed to load. Please refresh.');
+        }
+
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // Check for errors first
+        const hashParams = getHashParams();
+        if (hashParams.error) {
+          throw new Error(decodeURIComponent(hashParams.error_description || hashParams.error));
+        }
+
+        // Get token from query params (Supabase sends token_hash in query for email confirmation)
+        const queryParams = getQueryParams();
+        const tokenHash = queryParams.token_hash;
+        const type = queryParams.type;
+
+        // Also check hash for access_token (some Supabase configs use this)
+        const accessToken = hashParams.access_token;
+
+        if (!tokenHash && !accessToken) {
+          showError('Invalid or expired verification link. Please request a new confirmation email from the app.');
+          hideStatus();
+          return;
+        }
+
+        if (tokenHash && type === 'signup') {
+          // Verify email using token_hash
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'signup'
+          });
+
+          if (error) {
+            throw new Error('This verification link has expired or is invalid. Please request a new one.');
+          }
+
+          hideStatus();
+          showSuccess('Email verified successfully! You can now use all features in the IvoryOS app.');
+          showOpenAppButton();
+          return;
+        }
+
+        if (accessToken) {
+          // Set session using access token
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: hashParams.refresh_token || ''
+          });
+
+          if (error) {
+            throw new Error('This verification link has expired or is invalid. Please request a new one.');
+          }
+
+          hideStatus();
+          showSuccess('Email verified successfully! You can now use all features in the IvoryOS app.');
+          showOpenAppButton();
+          return;
+        }
+
+        showError('Invalid verification link. Please request a new confirmation email from the app.');
+        hideStatus();
+
+      } catch (err) {
+        showError(err.message || 'Something went wrong. Please request a new verification email.');
+        hideStatus();
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
