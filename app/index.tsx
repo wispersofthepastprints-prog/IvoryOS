@@ -141,7 +141,7 @@ export default function DashboardScreen() {
       <View style={styles.actionsRow}>
         <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/bookings/new")} />
         <QuickActionButton icon="👤" label="New Client" onPress={() => router.push("/clients/new")} />
-        <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/bookings")} />
+        <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/invoices")} />
       </View>
 
       {data?.pendingActions && data.pendingActions.length > 0 && (
@@ -172,7 +172,7 @@ export default function DashboardScreen() {
           <Text style={styles.navIcon}>📋</Text>
           <Text style={styles.navLabel}>Bookings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/bookings")}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/invoices")}>
           <Text style={styles.navIcon}>💰</Text>
           <Text style={styles.navLabel}>Invoices</Text>
         </TouchableOpacity>
