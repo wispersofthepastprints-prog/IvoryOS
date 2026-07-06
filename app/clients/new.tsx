@@ -49,6 +49,16 @@ export default function NewClientScreen() {
         return;
       }
 
+      // NEW: Check if email is verified
+      if (!user.email_confirmed_at) {
+        Alert.alert(
+          "Email Not Verified",
+          "Please verify your email before creating clients. Check your inbox for the confirmation link."
+        );
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.from("clients").insert({
         auth_id: user.id,
         full_name: fullName,
