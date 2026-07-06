@@ -11,19 +11,30 @@ export default function BookingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const fetchBookings = async () => {
-    setErrorMsg("");
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-	const user = session?.user;
-	if (!user) {
-  	setErrorMsg("Please log in to continue.");
- 	 return;
-	}
-	if (!user.email_confirmed_at) {
-  	setErrorMsg("Please verify your email before viewing bookings. Check your inbox for the confirmation link.");
- 	 return;
-	}
+const fetchBookings = async () => {
+  setErrorMsg("");
+  try {
+    let session = null;
+    let attempts = 0;
+    while (!session && attempts < 3) {
+      const { data } = await supabase.auth.getSession();
+      session = data?.session;
+      if (!session) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      attempts++;
+    }
+
+    const user = session?.user;
+    if (!user) {
+      setErrorMsg("Session expired. Please log out and log back in.");
+      return;
+    }
+
+    if (!user.email_confirmed_at) {
+      setErrorMsg("Please verify your email before viewing bookings. Check your inbox for the confirmation link.");
+      return;
+    }
 
       const { data: profile, error: profileError } = await supabase
         .from("photographers")
