@@ -15,11 +15,15 @@ export default function BookingsScreen() {
     setErrorMsg("");
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user) {
-        setErrorMsg("Not logged in");
-        return;
-      }
+	const user = session?.user;
+	if (!user) {
+  	setErrorMsg("Please log in to continue.");
+ 	 return;
+	}
+	if (!user.email_confirmed_at) {
+  	setErrorMsg("Please verify your email before viewing bookings. Check your inbox for the confirmation link.");
+ 	 return;
+	}
 
       const { data: profile, error: profileError } = await supabase
         .from("photographers")
