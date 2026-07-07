@@ -117,12 +117,7 @@ export default function NewContractScreen() {
 
         <View style={styles.hintBox}>
           <Text style={styles.hintTitle}>💡 Template Variables</Text>
-          <Text style={styles.hintText}>{{CLIENT_NAME}} — Auto-filled from client{"
-"}{{EVENT_DATE}} — Auto-filled from booking{"
-"}{{EVENT_LOCATION}} — Auto-filled from booking{"
-"}{{PACKAGE_NAME}} — Auto-filled from booking{"
-"}{{TOTAL_PRICE}} — Auto-filled from booking{"
-"}{{PHOTOGRAPHER_NAME}} — Your profile name</Text>
+	<Text style={styles.hintText}>{"{{CLIENT_NAME}} — Auto-filled from client\n{{EVENT_DATE}} — Auto-filled from booking\n{{EVENT_LOCATION}} — Auto-filled from booking\n	{{PACKAGE_NAME}} — Auto-filled from booking\n{{TOTAL_PRICE}} — Auto-filled from booking\n{{PHOTOGRAPHER_NAME}} — Your profile name"}</Text>
         </View>
       </View>
 
