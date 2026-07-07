@@ -162,26 +162,35 @@ export default function DashboardScreen() {
       )}
 
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/settings")}>
-          <Text style={styles.navIcon}>⚙️</Text>
-          <Text style={styles.navLabel}>Settings</Text>
+      <View style={styles.bottomNav}>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/")}>
+          <Text style={styles.navIcon}>🏠</Text>
+          <Text style={styles.navLabel}>Home</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/clients")}>
           <Text style={styles.navIcon}>👥</Text>
           <Text style={styles.navLabel}>Clients</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/bookings")}>
-          <Text style={styles.navIcon}>📋</Text>
+          <Text style={styles.navIcon}>📅</Text>
           <Text style={styles.navLabel}>Bookings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/invoices")}>
-          <Text style={styles.navIcon}>💰</Text>
-          <Text style={styles.navLabel}>Invoices</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/contracts")}>
+          <Text style={styles.navIcon}>📝</Text>
+          <Text style={styles.navLabel}>Contracts</Text>
         </TouchableOpacity>
-	<TouchableOpacity style={styles.navItem} onPress={() => router.push("/calendar")}>
-	  <Text style={styles.navIcon}>📅</Text>
-	  <Text style={styles.navLabel}>Calendar</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/emails")}>
+          <Text style={styles.navIcon}>📧</Text>
+          <Text style={styles.navLabel}>Emails</Text>
+        </TouchableOpacity>
+	<TouchableOpacity style={styles.navItem} onPress={() => router.push("/packages")}>
+	  <Text style={styles.navIcon}>📦</Text>
+	  <Text style={styles.navLabel}>Packages</Text>
 	</TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/settings")}>
+          <Text style={styles.navIcon}>⚙️</Text>
+          <Text style={styles.navLabel}>Settings</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
