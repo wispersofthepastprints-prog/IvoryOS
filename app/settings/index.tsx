@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "rea
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import * as WebBrowser from "expo-web-browser";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signInWithGoogle } from "../../lib/google-calendar";
 
 const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
 const CLIENT_ID = "ca_UkHV4OfPSH1Uk98habHV7S2LUaMjuwOF";
@@ -12,16 +14,18 @@ export default function SettingsScreen() {
   const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [googleConnected, setGoogleConnected] = useState(false);
 
   useEffect(() => {
     fetchProfile();
+    checkGoogleConnection();
   }, []);
 
   const fetchProfile = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
-      
+
       if (!user) {
         setLoading(false);
         return;
@@ -47,6 +51,30 @@ export default function SettingsScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkGoogleConnection = async () => {
+    const token = await AsyncStorage.getItem("google_access_token");
+    setGoogleConnected(!!token);
+  };
+
+  const handleConnectGoogle = async () => {
+    try {
+      const token = await signInWithGoogle();
+      if (token) {
+        await AsyncStorage.setItem("google_access_token", token);
+        setGoogleConnected(true);
+        Alert.alert("Success", "Google Calendar connected!");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    }
+  };
+
+  const handleDisconnectGoogle = async () => {
+    await AsyncStorage.removeItem("google_access_token");
+    setGoogleConnected(false);
+    Alert.alert("Disconnected", "Google Calendar disconnected.");
   };
 
   const handleUpgrade = async () => {
@@ -131,6 +159,21 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.sectionLabel}>INTEGRATIONS</Text>
+        <TouchableOpacity 
+          style={styles.settingRow} 
+          onPress={googleConnected ? handleDisconnectGoogle : handleConnectGoogle}
+        >
+          <Text style={styles.settingLabel}>
+            {googleConnected ? "🔓 Disconnect Google Calendar" : "🔗 Connect Google Calendar"}
+          </Text>
+          <Text style={styles.settingValue}>
+            {googleConnected ? "Connected" : "Not connected"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.sectionLabel}>PAYOUTS</Text>
         {profile?.stripe_connect_account_id ? (
           <Text style={styles.connectedText}>✅ Bank account connected</Text>
@@ -212,6 +255,16 @@ const styles = StyleSheet.create({
   },
   upgradeText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700" },
   activeText: { fontSize: 14, color: "#059669", fontWeight: "600" },
+  settingRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  settingLabel: { fontSize: 15, color: "#0A0A0A", fontWeight: "600" },
+  settingValue: { fontSize: 14, color: "#666" },
   connectedText: { fontSize: 14, color: "#059669", fontWeight: "600" },
   connectButton: {
     backgroundColor: "#DBEAFE",
