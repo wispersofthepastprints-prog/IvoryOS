@@ -3,6 +3,8 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView,
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createCalendarEvent } from "../../lib/google-calendar";
 
 export default function NewBookingScreen() {
   const router = useRouter();
@@ -63,6 +65,29 @@ export default function NewBookingScreen() {
       if (error) {
         Alert.alert("Error", error.message);
       } else {
+        // Sync to Google Calendar
+        const googleToken = await AsyncStorage.getItem("google_access_token");
+        if (googleToken) {
+          try {
+            const { data: clientData } = await supabase
+              .from("clients")
+              .select("full_name")
+              .eq("id", clientId)
+              .single();
+
+            await createCalendarEvent(googleToken, {
+              summary: `Wedding: ${clientData?.full_name || "Client"}`,
+              description: packageDescription,
+              location: location,
+              startDate: eventDate.toISOString().split("T")[0],
+              endDate: eventDate.toISOString().split("T")[0],
+            });
+            console.log("Synced to Google Calendar");
+          } catch (err) {
+            console.error("Google Calendar sync failed:", err);
+          }
+        }
+
         Alert.alert("Success", "Booking saved!");
         router.replace("/bookings");
       }
