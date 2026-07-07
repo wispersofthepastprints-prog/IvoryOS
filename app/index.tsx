@@ -141,6 +141,8 @@ export default function DashboardScreen() {
       <View style={styles.actionsRow}>
         <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/bookings/new")} />
         <QuickActionButton icon="👤" label="New Client" onPress={() => router.push("/clients/new")} />
+	<QuickActionButton icon="📝" label="New Contract" onPress={() => router.push("/contracts/new")} />
+	<QuickActionButton icon="📧" label="Send Email" onPress={() => router.push("/emails")} />
         <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/invoices")} />
       </View>
 
