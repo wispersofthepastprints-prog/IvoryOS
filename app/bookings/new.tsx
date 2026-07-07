@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -10,7 +10,8 @@ export default function NewBookingScreen() {
   const [location, setLocation] = useState("");
   const [packagePrice, setPackagePrice] = useState("");
   const [packageDescription, setPackageDescription] = useState("");
-  const [eventDate, setEventDate] = useState(new Date());
+  const { date } = useLocalSearchParams();
+  const [eventDate, setEventDate] = useState(date ? new Date(date as string) : new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [status, setStatus] = useState("inquiry");
   const [loading, setLoading] = useState(false);

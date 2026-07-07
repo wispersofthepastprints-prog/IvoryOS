@@ -176,6 +176,10 @@ export default function DashboardScreen() {
           <Text style={styles.navIcon}>💰</Text>
           <Text style={styles.navLabel}>Invoices</Text>
         </TouchableOpacity>
+	<TouchableOpacity style={styles.navItem} onPress={() => router.push("/calendar")}>
+	  <Text style={styles.navIcon}>📅</Text>
+	  <Text style={styles.navLabel}>Calendar</Text>
+	</TouchableOpacity>
       </View>
     </ScrollView>
   );
