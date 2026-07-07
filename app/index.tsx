@@ -3,11 +3,10 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } 
 import { useRouter } from "expo-router";
 import { supabase } from "../lib/supabase";
 import QuickActionButton from "../components/QuickActionButton";
-import { DashboardData } from "../types/database";
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<any>(null);
@@ -16,17 +15,33 @@ export default function DashboardScreen() {
 
   const fetchDashboardData = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      let attempts = 0;
+      while (!session && attempts < 3) {
+        const { data: sesh } = await supabase.auth.getSession();
+        session = sesh?.session;
+        if (!session) await new Promise((r) => setTimeout(r, 500));
+        attempts++;
+      }
       const user = session?.user;
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
-      const { data: profileData } = await supabase
+      const { data: profileData, error: profileError } = await supabase
         .from("photographers")
-        .select("id, full_name")
+        .select("id, full_name, email, business_name, location, phone, created_at, subscription_tier, stripe_connect_account_id")
         .eq("auth_id", user.id)
         .single();
-      
+
+      if (profileError) {
+        console.error("Profile fetch error:", profileError);
+      }
       setProfile(profileData);
+
+      // Use profileData directly (not state) to avoid race condition
+      const photographerId = profileData?.id;
 
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
@@ -35,7 +50,7 @@ export default function DashboardScreen() {
       const { data: bookings } = await supabase
         .from("bookings")
         .select("*")
-        .eq("photographer_id", profile?.id)
+        .eq("photographer_id", photographerId)
         .gte("created_at", startOfMonth.toISOString())
         .order("event_date", { ascending: true });
 
@@ -45,7 +60,7 @@ export default function DashboardScreen() {
       const { data: upcoming } = await supabase
         .from("bookings")
         .select("*, clients(*)")
-        .eq("photographer_id", profile?.id)
+        .eq("photographer_id", photographerId)
         .gte("event_date", today)
         .order("event_date", { ascending: true })
         .limit(1);
@@ -55,7 +70,7 @@ export default function DashboardScreen() {
       const { data: unsignedContracts } = await supabase
         .from("bookings")
         .select("*, clients(full_name)")
-        .eq("photographer_id", profile?.id)
+        .eq("photographer_id", photographerId)
         .eq("status", "contracted")
         .lt("contract_sent_at", new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString());
 
@@ -70,7 +85,7 @@ export default function DashboardScreen() {
       const { data: unpaidDeposits } = await supabase
         .from("bookings")
         .select("*, clients(full_name)")
-        .eq("photographer_id", profile?.id)
+        .eq("photographer_id", photographerId)
         .eq("deposit_paid", false)
         .eq("status", "confirmed");
 
@@ -83,18 +98,23 @@ export default function DashboardScreen() {
       });
 
       setData({
-        monthlyRevenue, bookingCount: bookings?.length || 0,
+        monthlyRevenue,
+        bookingCount: bookings?.length || 0,
         upcomingBooking: upcoming?.[0] || null,
         upcomingClient: upcoming?.[0]?.clients || null,
         pendingActions: pendingActions.slice(0, 3),
       });
-    } catch (error) { console.error("Dashboard error:", error); }
-    finally { setLoading(false); setRefreshing(false); }
+    } catch (error) {
+      console.error("Dashboard error:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
   const onRefresh = () => { setRefreshing(true); fetchDashboardData(); };
 
-  const formatCurrency = (cents: number) => `$${(cents / 100).toLocaleString()}`;
+  const formatCurrency = (amount: number) => `$${amount.toLocaleString()}`;
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "";
     return new Date(dateStr).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
@@ -109,58 +129,72 @@ export default function DashboardScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Hi, {profile?.full_name?.split(" ")[0] || "Photographer"} 👋</Text>
-        <TouchableOpacity onPress={() => router.push("/settings")}>
-          <Text style={styles.settings}>⚙️</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Hi, {profile?.full_name?.split(" ")[0] || "Photographer"} 👋</Text>
+          <TouchableOpacity onPress={() => router.push("/settings")}>
+            <Text style={styles.settings}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.revenueCard}>
-        <Text style={styles.revenueLabel}>THIS MONTH</Text>
-        <Text style={styles.revenueAmount}>{formatCurrency(data?.monthlyRevenue || 0)}</Text>
-        <Text style={styles.revenueSubtext}>{data?.bookingCount || 0} bookings</Text>
-      </View>
+        <View style={styles.revenueCard}>
+          <Text style={styles.revenueLabel}>THIS MONTH</Text>
+          <Text style={styles.revenueAmount}>{formatCurrency(data?.monthlyRevenue || 0)}</Text>
+          <Text style={styles.revenueSubtext}>{data?.bookingCount || 0} bookings</Text>
+        </View>
 
-      {data?.upcomingBooking && (
-        <TouchableOpacity 
-          style={styles.upcomingCard}
-          onPress={() => router.push(`/bookings/${data.upcomingBooking.id}`)}
+        {data?.upcomingBooking && (
+          <TouchableOpacity
+            style={styles.upcomingCard}
+            onPress={() => router.push(`/bookings/${data.upcomingBooking.id}`)}
+          >
+            <Text style={styles.sectionLabel}>UPCOMING</Text>
+            <Text style={styles.upcomingTitle}>{data.upcomingBooking.title}</Text>
+            <Text style={styles.upcomingDetail}>📅 {formatDate(data.upcomingBooking.event_date)}</Text>
+            <Text style={styles.upcomingDetail}>📍 {data.upcomingBooking.event_location || "Location TBA"}</Text>
+            <Text style={styles.shotListText}>View Booking →</Text>
+          </TouchableOpacity>
+        )}
+
+        <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled={true}
+          contentContainerStyle={styles.actionsRow}
         >
-          <Text style={styles.sectionLabel}>UPCOMING</Text>
-          <Text style={styles.upcomingTitle}>{data.upcomingBooking.title}</Text>
-          <Text style={styles.upcomingDetail}>📅 {formatDate(data.upcomingBooking.event_date)}</Text>
-          <Text style={styles.upcomingDetail}>📍 {data.upcomingBooking.event_location || "Location TBA"}</Text>
-          <Text style={styles.shotListText}>View Booking →</Text>
-        </TouchableOpacity>
-      )}
+          <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/bookings/new")} />
+          <QuickActionButton icon="👤" label="New Client" onPress={() => router.push("/clients/new")} />
+          <QuickActionButton icon="📝" label="New Contract" onPress={() => router.push("/contracts/new")} />
+          <QuickActionButton icon="📧" label="Send Email" onPress={() => router.push("/emails")} />
+          <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/invoices")} />
+          <QuickActionButton icon="📦" label="New Package" onPress={() => router.push("/packages")} />
+        </ScrollView>
 
-      <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
-      <View style={styles.actionsRow}>
-        <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/bookings/new")} />
-        <QuickActionButton icon="👤" label="New Client" onPress={() => router.push("/clients/new")} />
-	<QuickActionButton icon="📝" label="New Contract" onPress={() => router.push("/contracts/new")} />
-	<QuickActionButton icon="📧" label="Send Email" onPress={() => router.push("/emails")} />
-        <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/invoices")} />
-      </View>
+        {data?.pendingActions && data.pendingActions.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>PENDING</Text>
+            {data.pendingActions.map((action: any) => (
+              <TouchableOpacity key={action.id} style={styles.pendingItem}>
+                <Text style={styles.pendingIcon}>⚠️</Text>
+                <View style={styles.pendingContent}>
+                  <Text style={styles.pendingText}>{action.message}</Text>
+                  {action.daysOverdue > 0 && <Text style={styles.pendingOverdue}>{action.daysOverdue} days overdue</Text>}
+                </View>
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
 
-      {data?.pendingActions && data.pendingActions.length > 0 && (
-        <>
-          <Text style={styles.sectionLabel}>PENDING</Text>
-          {data.pendingActions.map((action) => (
-            <TouchableOpacity key={action.id} style={styles.pendingItem}>
-              <Text style={styles.pendingIcon}>⚠️</Text>
-              <View style={styles.pendingContent}>
-                <Text style={styles.pendingText}>{action.message}</Text>
-                {action.daysOverdue > 0 && <Text style={styles.pendingOverdue}>{action.daysOverdue} days overdue</Text>}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </>
-      )}
+        {/* Spacer for bottom nav */}
+        <View style={{ height: 100 }} />
+      </ScrollView>
 
+      {/* Bottom Navigation — Fixed at bottom */}
       <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/")}>
           <Text style={styles.navIcon}>🏠</Text>
@@ -174,29 +208,22 @@ export default function DashboardScreen() {
           <Text style={styles.navIcon}>📅</Text>
           <Text style={styles.navLabel}>Bookings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/contracts")}>
-          <Text style={styles.navIcon}>📝</Text>
-          <Text style={styles.navLabel}>Contracts</Text>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/more")}>
+          <Text style={styles.navIcon}>⋮</Text>
+          <Text style={styles.navLabel}>More</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/emails")}>
-          <Text style={styles.navIcon}>📧</Text>
-          <Text style={styles.navLabel}>Emails</Text>
-        </TouchableOpacity>
-	<TouchableOpacity style={styles.navItem} onPress={() => router.push("/packages")}>
-	  <Text style={styles.navIcon}>📦</Text>
-	  <Text style={styles.navLabel}>Packages</Text>
-	</TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/settings")}>
           <Text style={styles.navIcon}>⚙️</Text>
           <Text style={styles.navLabel}>Settings</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F6F0" },
+  scrollView: { flex: 1 },
   center: { justifyContent: "center", alignItems: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingTop: 60, paddingBottom: 16 },
   greeting: { fontSize: 24, fontWeight: "700", color: "#0A0A0A" },
@@ -210,14 +237,14 @@ const styles = StyleSheet.create({
   upcomingTitle: { fontSize: 18, fontWeight: "700", color: "#0A0A0A", marginBottom: 8 },
   upcomingDetail: { fontSize: 14, color: "#666", marginBottom: 4 },
   shotListText: { color: "#C9A227", fontWeight: "600", fontSize: 14, marginTop: 8 },
-  actionsRow: { flexDirection: "row", justifyContent: "space-around", paddingHorizontal: 24, marginBottom: 24 },
+  actionsRow: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8 },
   pendingItem: { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: 24, padding: 16, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: "#FEE2E2" },
   pendingIcon: { fontSize: 20, marginRight: 12 },
   pendingContent: { flex: 1 },
   pendingText: { fontSize: 14, color: "#0A0A0A", fontWeight: "500" },
   pendingOverdue: { fontSize: 12, color: "#DC2626", marginTop: 2 },
-  bottomNav: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 16, paddingBottom: 32, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E5E5E5", marginTop: 20 },
-  navItem: { alignItems: "center" },
+  bottomNav: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 12, paddingBottom: 28, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E5E5E5", position: "absolute", bottom: 0, left: 0, right: 0 },
+  navItem: { alignItems: "center", flex: 1 },
   navIcon: { fontSize: 20, marginBottom: 4 },
   navLabel: { fontSize: 11, color: "#999" },
   navLabelActive: { fontSize: 11, color: "#C9A227", fontWeight: "600" },
