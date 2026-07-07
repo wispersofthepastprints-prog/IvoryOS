@@ -61,9 +61,7 @@ export default function ContractDetailScreen() {
     if (!contract) return;
     try {
       await Share.share({
-        message: contract.title + "
-
-" + contract.content,
+        message: contract.title + "\n\n" + contract.content,
         title: contract.title,
       });
     } catch (err: any) {
