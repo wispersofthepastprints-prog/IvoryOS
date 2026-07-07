@@ -162,7 +162,6 @@ export default function DashboardScreen() {
       )}
 
       <View style={styles.bottomNav}>
-      <View style={styles.bottomNav}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/")}>
           <Text style={styles.navIcon}>🏠</Text>
           <Text style={styles.navLabel}>Home</Text>
