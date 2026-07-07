@@ -10,28 +10,42 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
 ];
 
+// FIX: Discovery.Google is undefined in some expo-auth-session versions
+// Define the Google OAuth endpoints manually
+const GOOGLE_DISCOVERY = {
+  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenEndpoint: 'https://oauth2.googleapis.com/token',
+  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
+};
+
 const REDIRECT_URI = AuthSession.makeRedirectUri({
   scheme: 'ivoryos',
   path: 'google-auth',
 });
 
 export async function signInWithGoogle() {
-  const authRequest = new AuthSession.AuthRequest({
-    clientId: GOOGLE_CLIENT_ID,
-    scopes: SCOPES,
-    redirectUri: REDIRECT_URI,
-    responseType: AuthSession.ResponseType.Token,
-    usePKCE: false,
-  });
+  try {
+    const authRequest = new AuthSession.AuthRequest({
+      clientId: GOOGLE_CLIENT_ID,
+      scopes: SCOPES,
+      redirectUri: REDIRECT_URI,
+      responseType: AuthSession.ResponseType.Token,
+      usePKCE: false,
+    });
 
-  const result = await authRequest.promptAsync(AuthSession.Discovery.Google, {
-    useProxy: Platform.OS !== 'web',
-  });
+    // FIX: Use manual discovery object instead of AuthSession.Discovery.Google
+    const result = await authRequest.promptAsync(GOOGLE_DISCOVERY, {
+      useProxy: Platform.OS !== 'web',
+    });
 
-  if (result.type === 'success') {
-    return result.authentication?.accessToken || null;
+    if (result.type === 'success') {
+      return result.authentication?.accessToken || null;
+    }
+    return null;
+  } catch (err: any) {
+    console.error('Google auth error:', err);
+    throw new Error('Failed to connect to Google Calendar: ' + err.message);
   }
-  return null;
 }
 
 export async function createCalendarEvent(accessToken: string, event: {

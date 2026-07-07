@@ -191,7 +191,7 @@ export default function SettingsScreen() {
         <Text style={styles.sectionLabel}>ACCOUNT</Text>
         <Text style={styles.infoRow}>📍 {profile?.location || "Glen Innes, NSW"}</Text>
         {profile?.phone && <Text style={styles.infoRow}>📞 {profile.phone}</Text>}
-        <Text style={styles.infoRow}>📅 Joined {new Date(profile?.created_at).toLocaleDateString("en-AU")}</Text>
+        <Text style={styles.infoRow}>📅 Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("en-AU") : "N/A"}</Text>
       </View>
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
