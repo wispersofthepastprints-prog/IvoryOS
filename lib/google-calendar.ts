@@ -1,51 +1,60 @@
-import * as AuthSession from 'expo-auth-session';
-import { Platform } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Web client ID for browser OAuth
 const GOOGLE_CLIENT_ID = '195901890313-3cacmm6jb1vrsq8ocdh2pihdug8rq2cv.apps.googleusercontent.com';
+
+// IMPORTANT: Replace with your actual GitHub Pages URL after enabling Pages
+// Format: https://YOUR_USERNAME.github.io/REPO_NAME/google-auth.html
+const REDIRECT_URI = 'https://wispersofthepastprints-prog.github.io/IvoryOS/google-auth.html';
 
 const SCOPES = [
   'openid',
   'profile',
   'email',
   'https://www.googleapis.com/auth/calendar.events',
-];
+].join(' ');
 
-// FIX: Discovery.Google is undefined in some expo-auth-session versions
-// Define the Google OAuth endpoints manually
-const GOOGLE_DISCOVERY = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-};
+const TOKEN_KEY = 'google_access_token';
 
-const REDIRECT_URI = AuthSession.makeRedirectUri({
-  scheme: 'ivoryos',
-  path: 'google-auth',
-});
-
-export async function signInWithGoogle() {
+export async function signInWithGoogle(): Promise<string | null> {
   try {
-    const authRequest = new AuthSession.AuthRequest({
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: SCOPES,
-      redirectUri: REDIRECT_URI,
-      responseType: AuthSession.ResponseType.Token,
-      usePKCE: false,
-    });
+    // Build Google OAuth URL
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
+      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      `&response_type=token` +
+      `&scope=${encodeURIComponent(SCOPES)}` +
+      `&prompt=consent` +
+      `&include_granted_scopes=true`;
 
-    // FIX: useProxy: false — direct auth, no Expo proxy
-    const result = await authRequest.promptAsync(GOOGLE_DISCOVERY, {
-      useProxy: false,
-    });
+    // Open browser for OAuth
+    const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
 
     if (result.type === 'success') {
-      return result.authentication?.accessToken || null;
+      // Parse token from redirect URL
+      const url = new URL(result.url);
+      const token = url.searchParams.get('token');
+
+      if (token) {
+        await AsyncStorage.setItem(TOKEN_KEY, token);
+        return token;
+      }
     }
+
     return null;
   } catch (err: any) {
     console.error('Google auth error:', err);
     throw new Error('Failed to connect to Google Calendar: ' + err.message);
   }
+}
+
+export async function getStoredToken(): Promise<string | null> {
+  return await AsyncStorage.getItem('google_access_token');
+}
+
+export async function clearStoredToken(): Promise<void> {
+  await AsyncStorage.removeItem('google_access_token');
 }
 
 export async function createCalendarEvent(accessToken: string, event: {
@@ -88,6 +97,5 @@ export async function deleteCalendarEvent(accessToken: string, eventId: string) 
       },
     }
   );
-
   return response.ok;
 }
