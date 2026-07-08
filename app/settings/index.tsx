@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "rea
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import * as WebBrowser from "expo-web-browser";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { signInWithGoogle } from "../../lib/google-calendar";
+import { signInWithGoogle, getStoredToken, clearStoredToken } from "../../lib/google-calendar";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
 const CLIENT_ID = "ca_UkHV4OfPSH1Uk98habHV7S2LUaMjuwOF";
@@ -12,6 +12,7 @@ const PAYMENT_LINK = "https://buy.stripe.com/7sY7sLeWX68g3Qr2Vkgbm00";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -23,9 +24,15 @@ export default function SettingsScreen() {
 
   const fetchProfile = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      let attempts = 0;
+      while (!session && attempts < 3) {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+        if (!session) await new Promise((r) => setTimeout(r, 500));
+        attempts++;
+      }
       const user = session?.user;
-
       if (!user) {
         setLoading(false);
         return;
@@ -39,42 +46,47 @@ export default function SettingsScreen() {
 
       if (error) {
         console.error("Profile fetch error:", error);
-        Alert.alert("Error", "Could not load profile: " + error.message);
-        setProfile(null);
       } else {
         setProfile(data);
       }
     } catch (err: any) {
       console.error("Unexpected error:", err);
-      Alert.alert("Error", err.message);
-      setProfile(null);
     } finally {
       setLoading(false);
     }
   };
 
   const checkGoogleConnection = async () => {
-    const token = await AsyncStorage.getItem("google_access_token");
-    setGoogleConnected(!!token);
+    try {
+      const token = await getStoredToken();
+      setGoogleConnected(!!token);
+    } catch (err) {
+      console.error("Google connection check failed:", err);
+      setGoogleConnected(false);
+    }
   };
 
   const handleConnectGoogle = async () => {
     try {
       const token = await signInWithGoogle();
       if (token) {
-        await AsyncStorage.setItem("google_access_token", token);
         setGoogleConnected(true);
-        Alert.alert("Success", "Google Calendar connected!");
+        Alert.alert("Success", "Google Calendar connected! Bookings will now sync automatically.");
       }
     } catch (err: any) {
-      Alert.alert("Error", err.message);
+      console.error("Google connect error:", err);
+      Alert.alert("Error", err.message || "Failed to connect Google Calendar.");
     }
   };
 
   const handleDisconnectGoogle = async () => {
-    await AsyncStorage.removeItem("google_access_token");
-    setGoogleConnected(false);
-    Alert.alert("Disconnected", "Google Calendar disconnected.");
+    try {
+      await clearStoredToken();
+      setGoogleConnected(false);
+      Alert.alert("Disconnected", "Google Calendar disconnected.");
+    } catch (err: any) {
+      console.error("Google disconnect error:", err);
+    }
   };
 
   const handleUpgrade = async () => {
@@ -167,7 +179,7 @@ export default function SettingsScreen() {
           <Text style={styles.settingLabel}>
             {googleConnected ? "🔓 Disconnect Google Calendar" : "🔗 Connect Google Calendar"}
           </Text>
-          <Text style={styles.settingValue}>
+          <Text style={[styles.settingValue, googleConnected && styles.connectedValue]}>
             {googleConnected ? "Connected" : "Not connected"}
           </Text>
         </TouchableOpacity>
@@ -194,7 +206,7 @@ export default function SettingsScreen() {
         <Text style={styles.infoRow}>📅 Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("en-AU") : "N/A"}</Text>
       </View>
 
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+      <TouchableOpacity style={[styles.logoutButton, { marginBottom: Math.max(insets.bottom + 20, 40) }]} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
@@ -265,6 +277,7 @@ const styles = StyleSheet.create({
   },
   settingLabel: { fontSize: 15, color: "#0A0A0A", fontWeight: "600" },
   settingValue: { fontSize: 14, color: "#666" },
+  connectedValue: { color: "#059669", fontWeight: "600" },
   connectedText: { fontSize: 14, color: "#059669", fontWeight: "600" },
   connectButton: {
     backgroundColor: "#DBEAFE",

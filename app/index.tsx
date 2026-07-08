@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { supabase } from "../lib/supabase";
 import QuickActionButton from "../components/QuickActionButton";
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -129,8 +131,9 @@ export default function DashboardScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView
+    <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
+        <ScrollView ...>
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
@@ -194,7 +197,7 @@ export default function DashboardScreen() {
       </ScrollView>
 
       {/* Bottom Navigation — Fixed at bottom */}
-      <View style={styles.bottomNav}>
+        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/")}>
           <Text style={styles.navIcon}>🏠</Text>
           <Text style={styles.navLabel}>Home</Text>
