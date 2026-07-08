@@ -11,25 +11,24 @@ export default function BookingsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-const fetchBookings = async () => {
-  setErrorMsg("");
-  try {
-    let session = null;
-    let attempts = 0;
-    while (!session && attempts < 3) {
-      const { data } = await supabase.auth.getSession();
-      session = data?.session;
-      if (!session) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+  const fetchBookings = async () => {
+    try {
+      let session = null;
+      let attempts = 0;
+      while (!session && attempts < 3) {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+        if (!session) await new Promise((r) => setTimeout(r, 500));
+        attempts++;
       }
-      attempts++;
-    }
 
-    const user = session?.user;
-    if (!user) {
-      setErrorMsg("Session expired. Please log out and log back in.");
-      return;
-    }
+      const user = session?.user;
+      if (!user) {
+        setError("Session expired. Please log out and log back in.");
+        setLoading(false);
+        return;
+      }
+      // ... rest of fetch
 
     if (!user.email_confirmed_at) {
       setErrorMsg("Please verify your email before viewing bookings. Check your inbox for the confirmation link.");
