@@ -161,19 +161,18 @@ export default function DashboardScreen() {
         )}
 
         <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          nestedScrollEnabled={true}
-          contentContainerStyle={styles.actionsRow}
-        >
-          <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/bookings/new")} />
-          <QuickActionButton icon="👤" label="New Client" onPress={() => router.push("/clients/new")} />
-          <QuickActionButton icon="📝" label="New Contract" onPress={() => router.push("/contracts/new")} />
-          <QuickActionButton icon="📧" label="Send Email" onPress={() => router.push("/emails")} />
-          <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/invoices")} />
-          <QuickActionButton icon="📦" label="New Package" onPress={() => router.push("/packages")} />
-        </ScrollView>
+        <View style={styles.actionsGrid}>
+          <View style={styles.actionsRow}>
+            <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/bookings/new")} />
+            <QuickActionButton icon="👤" label="New Client" onPress={() => router.push("/clients/new")} />
+            <QuickActionButton icon="📝" label="New Contract" onPress={() => router.push("/contracts/new")} />
+            <QuickActionButton icon="📧" label="Send Email" onPress={() => router.push("/emails")} />
+          </View>
+          <View style={styles.actionsRow}>
+            <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/invoices")} />
+            <QuickActionButton icon="📦" label="New Package" onPress={() => router.push("/packages")} />
+          </View>
+        </View>
 
         {data?.pendingActions && data.pendingActions.length > 0 && (
           <>
@@ -191,7 +190,7 @@ export default function DashboardScreen() {
         )}
 
         {/* Spacer for bottom nav */}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       {/* Bottom Navigation — Fixed at bottom */}
@@ -237,7 +236,8 @@ const styles = StyleSheet.create({
   upcomingTitle: { fontSize: 18, fontWeight: "700", color: "#0A0A0A", marginBottom: 8 },
   upcomingDetail: { fontSize: 14, color: "#666", marginBottom: 4 },
   shotListText: { color: "#C9A227", fontWeight: "600", fontSize: 14, marginTop: 8 },
-  actionsRow: { flexDirection: "row", paddingHorizontal: 16, paddingVertical: 8 },
+  actionsGrid: { marginHorizontal: 24, alignItems: "center", gap: 16, marginBottom: 16 },
+  actionsRow: { flexDirection: "row", justifyContent: "center", gap: 16, width: "100%" },
   pendingItem: { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: 24, padding: 16, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: "#FEE2E2" },
   pendingIcon: { fontSize: 20, marginRight: 12 },
   pendingContent: { flex: 1 },
