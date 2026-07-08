@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import QuickActionButton from "../components/QuickActionButton";
 
@@ -42,7 +42,6 @@ export default function DashboardScreen() {
       }
       setProfile(profileData);
 
-      // Use profileData directly (not state) to avoid race condition
       const photographerId = profileData?.id;
 
       const startOfMonth = new Date();
@@ -131,9 +130,8 @@ export default function DashboardScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.container}>
-        <ScrollView ...>
+    <View style={styles.container}>
+      <ScrollView
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
@@ -192,12 +190,10 @@ export default function DashboardScreen() {
           </>
         )}
 
-        {/* Spacer for bottom nav */}
-        <View style={{ height: 20 }} />
+        <View style={{ height: 100 + insets.bottom }} />
       </ScrollView>
 
-      {/* Bottom Navigation — Fixed at bottom */}
-        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
+      <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/")}>
           <Text style={styles.navIcon}>🏠</Text>
           <Text style={styles.navLabel}>Home</Text>
@@ -239,14 +235,14 @@ const styles = StyleSheet.create({
   upcomingTitle: { fontSize: 18, fontWeight: "700", color: "#0A0A0A", marginBottom: 8 },
   upcomingDetail: { fontSize: 14, color: "#666", marginBottom: 4 },
   shotListText: { color: "#C9A227", fontWeight: "600", fontSize: 14, marginTop: 8 },
-  actionsGrid: { marginHorizontal: 24, alignItems: "center", gap: 16, marginBottom: 16 },
-  actionsRow: { flexDirection: "row", justifyContent: "center", gap: 16, width: "100%" },
+  actionsGrid: { marginHorizontal: 24, gap: 16, marginBottom: 16 },
+  actionsRow: { flexDirection: "row", justifyContent: "center", gap: 16 },
   pendingItem: { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: 24, padding: 16, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: "#FEE2E2" },
   pendingIcon: { fontSize: 20, marginRight: 12 },
   pendingContent: { flex: 1 },
   pendingText: { fontSize: 14, color: "#0A0A0A", fontWeight: "500" },
   pendingOverdue: { fontSize: 12, color: "#DC2626", marginTop: 2 },
-  bottomNav: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 12, paddingBottom: 28, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E5E5E5", position: "absolute", bottom: 0, left: 0, right: 0 },
+  bottomNav: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 12, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E5E5E5", position: "absolute", bottom: 0, left: 0, right: 0 },
   navItem: { alignItems: "center", flex: 1 },
   navIcon: { fontSize: 20, marginBottom: 4 },
   navLabel: { fontSize: 11, color: "#999" },
