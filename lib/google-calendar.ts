@@ -1,7 +1,7 @@
 import * as AuthSession from 'expo-auth-session';
 import { Platform } from 'react-native';
 
-const GOOGLE_CLIENT_ID = '195901890313-6ufcrbcjvnejbekllmns8dnitd6edqv2.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '195901890313-3cacmm6jb1vrsq8ocdh2pihdug8rq2cv.apps.googleusercontent.com';
 
 const SCOPES = [
   'openid',
@@ -33,9 +33,9 @@ export async function signInWithGoogle() {
       usePKCE: false,
     });
 
-    // FIX: Use manual discovery object instead of AuthSession.Discovery.Google
+    // FIX: useProxy: false — direct auth, no Expo proxy
     const result = await authRequest.promptAsync(GOOGLE_DISCOVERY, {
-      useProxy: Platform.OS !== 'web',
+      useProxy: false,
     });
 
     if (result.type === 'success') {
