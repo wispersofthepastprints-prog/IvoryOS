@@ -1,188 +1,193 @@
 import { useState, useEffect } from "react";
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import StatusBadge from "../../components/StatusBadge";
 
 export default function BookingsScreen() {
   const router = useRouter();
   const [bookings, setBookings] = useState<any[]>([]);
-  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>("");
 
   const fetchBookings = async () => {
+    setError(null);
+    setDebugInfo("Starting fetch...");
+    
     try {
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) await new Promise((r) => setTimeout(r, 500));
-        attempts++;
+      // Step 1: Get session
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const session = sessionData?.session;
+      
+      setDebugInfo(prev => prev + "\nSession: " + (session ? "OK" : "NULL"));
+      
+      if (sessionError) {
+        setDebugInfo(prev => prev + "\nSession error: " + sessionError.message);
       }
 
       const user = session?.user;
       if (!user) {
-        setError("Session expired. Please log out and log back in.");
+        setError("Not logged in. Please go to Settings and log out, then log back in.");
         setLoading(false);
+        setRefreshing(false);
         return;
       }
-      // ... rest of fetch
 
-    if (!user.email_confirmed_at) {
-      setErrorMsg("Please verify your email before viewing bookings. Check your inbox for the confirmation link.");
-      return;
-    }
+      setDebugInfo(prev => prev + "\nUser ID: " + user.id.substring(0, 8) + "...");
 
-      const { data: profile, error: profileError } = await supabase
+      // Step 2: Check email verification
+      if (!user.email_confirmed_at) {
+        setError("Email not verified. Please check your email for the verification link.");
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      setDebugInfo(prev => prev + "\nEmail verified: OK");
+
+      // Step 3: Get photographer profile
+      const { data: profileData, error: profileError } = await supabase
         .from("photographers")
-        .select("id")
+        .select("id, full_name")
         .eq("auth_id", user.id)
         .single();
 
+      setDebugInfo(prev => prev + "\nProfile: " + (profileData ? "FOUND" : "NOT FOUND"));
+      
       if (profileError) {
-        setErrorMsg("Profile error: " + profileError.message);
+        setDebugInfo(prev => prev + "\nProfile error: " + profileError.message);
+        setError("Profile error: " + profileError.message + ". Please complete your profile in Settings.");
+        setLoading(false);
+        setRefreshing(false);
         return;
       }
 
-      const { data, error } = await supabase
+      if (!profileData) {
+        setError("No photographer profile found. Please create your profile in Settings.");
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      const photographerId = profileData.id;
+      setDebugInfo(prev => prev + "\nPhotographer ID: " + photographerId.substring(0, 8) + "...");
+
+      // Step 4: Fetch bookings
+      const { data: bookingsData, error: bookingsError } = await supabase
         .from("bookings")
-        .select("*")
-        .eq("photographer_id", profile?.id)
+        .select("*, clients(*)")
+        .eq("photographer_id", photographerId)
         .order("event_date", { ascending: true });
 
-      if (error) {
-        setErrorMsg("Query error: " + error.message);
+      setDebugInfo(prev => prev + "\nBookings query: " + (bookingsError ? "ERROR: " + bookingsError.message : "OK"));
+
+      if (bookingsError) {
+        setError("Database error: " + bookingsError.message);
+        setLoading(false);
+        setRefreshing(false);
         return;
       }
 
-      setBookings(data || []);
+      setBookings(bookingsData || []);
+      setDebugInfo(prev => prev + "\nBookings count: " + (bookingsData?.length || 0));
+      
     } catch (err: any) {
-      setErrorMsg("Catch error: " + err.message);
+      setDebugInfo(prev => prev + "\nException: " + err.message);
+      setError("Unexpected error: " + err.message);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-  const handleDelete = (id: string, title: string) => {
-    Alert.alert("Delete Booking", `Delete "${title}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          const { error } = await supabase.from("bookings").delete().eq("id", id);
-          if (!error) fetchBookings();
-        },
-      },
-    ]);
   };
 
   useEffect(() => {
     fetchBookings();
   }, []);
 
-  const onRefresh = async () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    await fetchBookings();
-    setRefreshing(false);
+    fetchBookings();
   };
 
-  const filteredBookings = bookings.filter(b =>
-    b.title?.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "";
-    return new Date(dateStr).toLocaleDateString("en-AU", { day: "numeric", month: "short" });
-  };
-
-  const formatCurrency = (cents: number | null) => {
-    if (!cents) return "$0";
-    return `$${(cents / 100).toLocaleString()}`;
-  };
-
-  const renderBooking = ({ item }: { item: any }) => (
-    <View style={styles.bookingCard}>
-      <TouchableOpacity style={styles.bookingInfo} onPress={() => router.push(`/bookings/${item.id}`)}>
-        <Text style={styles.bookingTitle}>{item.title}</Text>
-        <Text style={styles.eventDate}>📅 {formatDate(item.event_date)}</Text>
-        <Text style={styles.price}>{formatCurrency(item.package_price)}</Text>
-      </TouchableOpacity>
-      <View style={styles.rightSide}>
-        <StatusBadge status={item.status} />
-        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDelete(item.id, item.title)}>
-          <Text style={styles.deleteText}>🗑</Text>
-        </TouchableOpacity>
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <Text>Loading bookings...</Text>
       </View>
-    </View>
-  );
+    );
+  }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       <View style={styles.header}>
         <Text style={styles.title}>Bookings</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => router.push("/bookings/new")}>
-          <Text style={styles.addText}>+</Text>
+          <Text style={styles.addButtonText}>+</Text>
         </TouchableOpacity>
       </View>
 
-      <TextInput
-        style={styles.search}
-        placeholder="Search bookings..."
-        placeholderTextColor="#999"
-        value={search}
-        onChangeText={setSearch}
-      />
-
-      {errorMsg ? (
+      {error && (
         <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{errorMsg}</Text>
+          <Text style={styles.errorText}>{error}</Text>
           <TouchableOpacity onPress={fetchBookings}>
             <Text style={styles.retryText}>Tap to retry</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {/* Debug info - remove after fixing */}
+      {debugInfo ? (
+        <View style={styles.debugBox}>
+          <Text style={styles.debugText}>{debugInfo}</Text>
+        </View>
       ) : null}
 
-      <FlatList
-        data={filteredBookings}
-        renderItem={renderBooking}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>No bookings yet</Text>
-            <TouchableOpacity style={styles.emptyButton} onPress={() => router.push("/bookings/new")}>
-              <Text style={styles.emptyButtonText}>Create your first booking</Text>
-            </TouchableOpacity>
-          </View>
-        }
-      />
-    </View>
+      {bookings.length === 0 && !error ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>No bookings yet</Text>
+          <TouchableOpacity style={styles.createButton} onPress={() => router.push("/bookings/new")}>
+            <Text style={styles.createButtonText}>Create your first booking</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        bookings.map((booking) => (
+          <TouchableOpacity
+            key={booking.id}
+            style={styles.card}
+            onPress={() => router.push(`/bookings/${booking.id}`)}
+          >
+            <Text style={styles.titleText}>{booking.title || "Untitled Booking"}</Text>
+            <Text style={styles.detail}>
+              📅 {booking.event_date ? new Date(booking.event_date).toLocaleDateString("en-AU") : "No date"}
+            </Text>
+            <Text style={styles.detail}>📍 {booking.event_location || "No location"}</Text>
+            <Text style={styles.price}>${booking.package_price || 0}</Text>
+          </TouchableOpacity>
+        ))
+      )}
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F6F0", paddingTop: 60 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginBottom: 16 },
+  container: { flex: 1, backgroundColor: "#F8F6F0" },
+  center: { justifyContent: "center", alignItems: "center", paddingTop: 100 },
+  header: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 28, fontWeight: "700", color: "#0A0A0A" },
-  addButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#C9A227", justifyContent: "center", alignItems: "center" },
-  addText: { color: "#0A0A0A", fontSize: 24, fontWeight: "700" },
-  search: { backgroundColor: "#FFFFFF", marginHorizontal: 24, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: "#E5E5E5", marginBottom: 16, color: "#0A0A0A" },
-  errorBox: { backgroundColor: "#FEE2E2", marginHorizontal: 24, padding: 16, borderRadius: 12, marginBottom: 12 },
-  errorText: { color: "#DC2626", fontSize: 14 },
-  retryText: { color: "#C9A227", fontSize: 14, fontWeight: "600", marginTop: 8, textAlign: "center" },
-  list: { paddingHorizontal: 24 },
-  bookingCard: { backgroundColor: "#FFFFFF", padding: 18, borderRadius: 16, marginBottom: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderWidth: 1, borderColor: "#E5E5E5" },
-  bookingInfo: { flex: 1 },
-  bookingTitle: { fontSize: 16, fontWeight: "600", color: "#0A0A0A", marginBottom: 4 },
-  eventDate: { fontSize: 13, color: "#999", marginBottom: 2 },
-  price: { fontSize: 14, fontWeight: "700", color: "#0A0A0A", marginTop: 2 },
-  rightSide: { alignItems: "flex-end" },
-  deleteButton: { marginTop: 8, padding: 4 },
-  deleteText: { fontSize: 18 },
-  empty: { alignItems: "center", marginTop: 60 },
-  emptyText: { fontSize: 16, color: "#999", marginBottom: 16 },
-  emptyButton: { backgroundColor: "#C9A227", paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12 },
-  emptyButtonText: { color: "#0A0A0A", fontSize: 14, fontWeight: "700" },
+  addButton: { backgroundColor: "#C9A227", width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  addButtonText: { fontSize: 24, fontWeight: "700", color: "#0A0A0A" },
+  errorBox: { backgroundColor: "#FEE2E2", marginHorizontal: 24, marginBottom: 16, padding: 16, borderRadius: 12, alignItems: "center" },
+  errorText: { color: "#DC2626", fontSize: 14, marginBottom: 8 },
+  retryText: { color: "#C9A227", fontWeight: "700", fontSize: 14 },
+  debugBox: { backgroundColor: "#E5E5E5", marginHorizontal: 24, marginBottom: 16, padding: 12, borderRadius: 8 },
+  debugText: { color: "#666", fontSize: 11, fontFamily: "monospace" },
+  empty: { alignItems: "center", marginTop: 60, paddingHorizontal: 24 },
+  emptyText: { fontSize: 18, color: "#999", marginBottom: 20 },
+  createButton: { backgroundColor: "#C9A227", paddingHorizontal: 32, paddingVertical: 16, borderRadius: 16 },
+  createButtonText: { color: "#0A0A0A", fontWeight: "700", fontSize: 16 },
+  card: { backgroundColor: "#FFFFFF", marginHorizontal: 24, marginBottom: 12, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: "#E5E5E5" },
+  titleText: { fontSize: 17, fontWeight: "700", color: "#0A0A0A", marginBottom: 8 },
+  detail: { fontSize: 14, color: "#666", marginBottom: 4 },
+  price: { fontSize: 16, fontWeight: "700", color: "#C9A227", marginTop: 4 },
 });
