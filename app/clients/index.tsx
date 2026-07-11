@@ -11,54 +11,30 @@ export default function ClientsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessionReady, setSessionReady] = useState(false);
 
-  // Listen for auth state changes - fires when session is restored from storage
   useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Clients auth event:", event, "Session:", session ? "present" : "null");
-      if (session) {
-        setSessionReady(true);
-      }
-    });
-
-    // Also try immediate check
-    checkSession();
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    loadWithRetry();
   }, []);
 
-  const checkSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      setSessionReady(true);
-    }
-  };
-
-  // Fetch clients when session is ready
-  useEffect(() => {
-    if (sessionReady) {
-      fetchClients();
-    }
-  }, [sessionReady]);
-
-  const fetchClients = async () => {
-    setError(null);
+  const loadWithRetry = async (retries = 5) => {
     setLoading(true);
+    setError(null);
 
-    try {
+    for (let i = 0; i < retries; i++) {
       const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-
-      if (!user) {
-        setError("Not logged in. Please log in.");
-        setLoading(false);
-        setRefreshing(false);
+      if (session?.user) {
+        await fetchClients(session.user);
         return;
       }
+      await new Promise((r) => setTimeout(r, 500));
+    }
 
+    setError("Session not found. Please log out and log back in.");
+    setLoading(false);
+  };
+
+  const fetchClients = async (user: any) => {
+    try {
       const { data: profile, error: profileError } = await supabase
         .from("photographers")
         .select("id")
@@ -68,7 +44,6 @@ export default function ClientsScreen() {
       if (profileError || !profile) {
         setError("Profile not found. Please complete your profile in Settings.");
         setLoading(false);
-        setRefreshing(false);
         return;
       }
 
@@ -81,7 +56,6 @@ export default function ClientsScreen() {
       if (clientsError) {
         setError("Database error: " + clientsError.message);
         setLoading(false);
-        setRefreshing(false);
         return;
       }
 
@@ -96,7 +70,7 @@ export default function ClientsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchClients();
+    loadWithRetry();
   };
 
   const filteredClients = clients.filter(c =>
@@ -115,10 +89,10 @@ export default function ClientsScreen() {
     </TouchableOpacity>
   );
 
-  if (loading && !sessionReady) {
+  if (loading && !refreshing) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text>Loading session...</Text>
+        <Text>Loading...</Text>
       </View>
     );
   }
@@ -135,14 +109,14 @@ export default function ClientsScreen() {
       {error && (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={fetchClients}>
+          <TouchableOpacity onPress={() => loadWithRetry()}>
             <Text style={styles.retryText}>Tap to retry</Text>
           </TouchableOpacity>
         </View>
       )}
 
       <TextInput style={styles.search} placeholder="Search clients..." placeholderTextColor="#999" value={search} onChangeText={setSearch} />
-
+      
       <FlatList 
         data={filteredClients} 
         renderItem={renderClient} 

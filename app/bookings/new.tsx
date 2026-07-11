@@ -65,10 +65,11 @@ export default function NewBookingScreen() {
       if (error) {
         Alert.alert("Error", error.message);
       } else {
-        // Sync to Google Calendar
-        const googleToken = await AsyncStorage.getItem("google_access_token");
-        if (googleToken) {
-          try {
+        // Sync to Google Calendar        // Sync to Google Calendar (optional — don't fail if it doesn't work)
+        try {
+          const { getStoredToken, createCalendarEvent } = await import("../../lib/google-calendar");
+          const googleToken = await getStoredToken();
+          if (googleToken) {
             const { data: clientData } = await supabase
               .from("clients")
               .select("full_name")
@@ -82,10 +83,11 @@ export default function NewBookingScreen() {
               startDate: eventDate.toISOString().split("T")[0],
               endDate: eventDate.toISOString().split("T")[0],
             });
-            console.log("Synced to Google Calendar");
-          } catch (err) {
-            console.error("Google Calendar sync failed:", err);
+            console.log("✅ Synced to Google Calendar");
           }
+        } catch (calendarErr) {
+          // Silently fail — booking is already saved
+          console.log("Google Calendar sync skipped:", calendarErr);
         }
 
         Alert.alert("Success", "Booking saved!");

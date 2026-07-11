@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl } from "react-native";
+import { useEffect, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
@@ -9,111 +9,76 @@ export default function BookingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>("");
 
-  const fetchBookings = async () => {
+  useEffect(() => {
+    loadWithRetry();
+  }, []);
+
+  const loadWithRetry = async (retries = 5) => {
+    setLoading(true);
     setError(null);
-    setDebugInfo("Starting fetch...");
-    
+
+    for (let i = 0; i < retries; i++) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await fetchBookings(session.user);
+        return;
+      }
+      // Wait 500ms before next retry
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    // All retries failed
+    setError("Session not found. Please log out and log back in.");
+    setLoading(false);
+  };
+
+  const fetchBookings = async (user: any) => {
     try {
-      // Step 1: Get session
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      
-      setDebugInfo(prev => prev + "\nSession: " + (session ? "OK" : "NULL"));
-      
-      if (sessionError) {
-        setDebugInfo(prev => prev + "\nSession error: " + sessionError.message);
-      }
-
-      const user = session?.user;
-      if (!user) {
-        setError("Not logged in. Please go to Settings and log out, then log back in.");
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      setDebugInfo(prev => prev + "\nUser ID: " + user.id.substring(0, 8) + "...");
-
-      // Step 2: Check email verification
-      if (!user.email_confirmed_at) {
-        setError("Email not verified. Please check your email for the verification link.");
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      setDebugInfo(prev => prev + "\nEmail verified: OK");
-
-      // Step 3: Get photographer profile
       const { data: profileData, error: profileError } = await supabase
         .from("photographers")
-        .select("id, full_name")
+        .select("id")
         .eq("auth_id", user.id)
         .single();
 
-      setDebugInfo(prev => prev + "\nProfile: " + (profileData ? "FOUND" : "NOT FOUND"));
-      
-      if (profileError) {
-        setDebugInfo(prev => prev + "\nProfile error: " + profileError.message);
-        setError("Profile error: " + profileError.message + ". Please complete your profile in Settings.");
+      if (profileError || !profileData) {
+        setError("Profile not found. Please complete your profile in Settings.");
         setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      if (!profileData) {
-        setError("No photographer profile found. Please create your profile in Settings.");
-        setLoading(false);
-        setRefreshing(false);
         return;
       }
 
       const photographerId = profileData.id;
-      setDebugInfo(prev => prev + "\nPhotographer ID: " + photographerId.substring(0, 8) + "...");
 
-      // Step 4: Fetch bookings
       const { data: bookingsData, error: bookingsError } = await supabase
         .from("bookings")
         .select("*, clients(*)")
         .eq("photographer_id", photographerId)
         .order("event_date", { ascending: true });
 
-      setDebugInfo(prev => prev + "\nBookings query: " + (bookingsError ? "ERROR: " + bookingsError.message : "OK"));
-
       if (bookingsError) {
         setError("Database error: " + bookingsError.message);
         setLoading(false);
-        setRefreshing(false);
         return;
       }
 
       setBookings(bookingsData || []);
-      setDebugInfo(prev => prev + "\nBookings count: " + (bookingsData?.length || 0));
-      
     } catch (err: any) {
-      setDebugInfo(prev => prev + "\nException: " + err.message);
-      setError("Unexpected error: " + err.message);
+      setError("Error: " + err.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
 
-  useEffect(() => {
-    fetchBookings();
-  }, []);
-
   const onRefresh = () => {
     setRefreshing(true);
-    fetchBookings();
+    loadWithRetry();
   };
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text>Loading bookings...</Text>
+        <Text>Loading...</Text>
       </View>
     );
   }
@@ -130,18 +95,11 @@ export default function BookingsScreen() {
       {error && (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity onPress={fetchBookings}>
+          <TouchableOpacity onPress={() => loadWithRetry()}>
             <Text style={styles.retryText}>Tap to retry</Text>
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Debug info - remove after fixing */}
-      {debugInfo ? (
-        <View style={styles.debugBox}>
-          <Text style={styles.debugText}>{debugInfo}</Text>
-        </View>
-      ) : null}
 
       {bookings.length === 0 && !error ? (
         <View style={styles.empty}>
@@ -180,8 +138,6 @@ const styles = StyleSheet.create({
   errorBox: { backgroundColor: "#FEE2E2", marginHorizontal: 24, marginBottom: 16, padding: 16, borderRadius: 12, alignItems: "center" },
   errorText: { color: "#DC2626", fontSize: 14, marginBottom: 8 },
   retryText: { color: "#C9A227", fontWeight: "700", fontSize: 14 },
-  debugBox: { backgroundColor: "#E5E5E5", marginHorizontal: 24, marginBottom: 16, padding: 12, borderRadius: 8 },
-  debugText: { color: "#666", fontSize: 11, fontFamily: "monospace" },
   empty: { alignItems: "center", marginTop: 60, paddingHorizontal: 24 },
   emptyText: { fontSize: 18, color: "#999", marginBottom: 20 },
   createButton: { backgroundColor: "#C9A227", paddingHorizontal: 32, paddingVertical: 16, borderRadius: 16 },
