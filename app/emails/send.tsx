@@ -62,16 +62,16 @@ export default function SendEmailScreen() {
         attempts++;
       }
       const user = session?.user;
-      if (!user || !user.email_confirmed_at) return;
-        await supabase.from("emails").insert({
-          auth_id: user.id,
-          client_id: clientId || null,
-          template_id: templateId || null,
-          subject: subject,
-          body: finalBody,
-          recipient: to,
-        });
-      }
+        if (!user || !user.email_confirmed_at) return;
+
+      await supabase.from("emails").insert({
+        auth_id: user.id,
+        client_id: clientId || null,
+        template_id: templateId || null,
+        subject: subject,
+        body: finalBody,
+        recipient: to,
+      });
 
       // Open mail client
       const canOpen = await Linking.canOpenURL(mailtoUrl);
