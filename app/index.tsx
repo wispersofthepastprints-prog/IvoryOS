@@ -30,7 +30,14 @@ export default function DashboardScreen() {
         setLoading(false);
         return;
       }
-
+      if (!user.email_confirmed_at) {
+        setLoading(false);
+        return;
+      }
+      if (!user.email_confirmed_at) {
+        setLoading(false);
+        return;
+      }
       const { data: profileData, error: profileError } = await supabase
         .from("photographers")
         .select("id, full_name, email, business_name, location, phone, created_at, subscription_tier, stripe_connect_account_id")
@@ -136,7 +143,7 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.header}>
-          <Text style={styles.greeting}>Hi, {profile?.full_name?.split(" ")[0] || "Photographer"} 👋</Text>
+          <Text style={styles.greeting}>Hi, {profile?.full_name?.split(" ")[0] || "there"} 👋</Text>
           <TouchableOpacity onPress={() => router.push("/settings")}>
             <Text style={styles.settings}>⚙️</Text>
           </TouchableOpacity>

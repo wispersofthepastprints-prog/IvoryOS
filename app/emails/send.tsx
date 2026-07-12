@@ -53,9 +53,16 @@ export default function SendEmailScreen() {
 
     try {
       // Log the email
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      let attempts = 0;
+      while (!session && attempts < 3) {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+        if (!session) await new Promise(r => setTimeout(r, 500));
+        attempts++;
+      }
       const user = session?.user;
-      if (user) {
+      if (!user || !user.email_confirmed_at) return;
         await supabase.from("emails").insert({
           auth_id: user.id,
           client_id: clientId || null,

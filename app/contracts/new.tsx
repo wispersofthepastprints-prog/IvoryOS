@@ -59,10 +59,8 @@ export default function NewContractScreen() {
       }
 
       const user = session?.user;
-      if (!user) {
-        Alert.alert("Session Expired", "Please log out and log back in.");
-        setLoading(false);
-        return;
+      if (!user) return;
+      if (!user.email_confirmed_at) return;
       }
 
       if (!user.email_confirmed_at) {

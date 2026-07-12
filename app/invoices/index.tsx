@@ -33,6 +33,10 @@ export default function InvoicesScreen() {
         setLoading(false);
         return;
       }
+      if (!user.email_confirmed_at) {
+        setLoading(false);
+        return;
+      }
 
       const { data, error } = await supabase
         .from("invoices")

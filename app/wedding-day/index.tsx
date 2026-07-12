@@ -11,9 +11,17 @@ export default function WeddingDayScreen() {
   }, []);
 
   const fetchTodayBookings = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    let session = null;
+    let attempts = 0;
+    while (!session && attempts < 3) {
+      const { data } = await supabase.auth.getSession();
+      session = data?.session;
+      if (!session) await new Promise(r => setTimeout(r, 500));
+      attempts++;
+    }
     const user = session?.user;
     if (!user) return;
+    if (!user.email_confirmed_at) return;
 
     const today = new Date().toISOString().split("T")[0];
     const { data } = await supabase

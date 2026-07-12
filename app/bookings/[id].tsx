@@ -30,7 +30,14 @@ export default function BookingDetailScreen() {
   const createPayment = async (type: "deposit" | "balance") => {
     try {
       const amount = type === "deposit" ? booking.deposit_amount : booking.balance_due;
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      let attempts = 0;
+      while (!session && attempts < 3) {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+        if (!session) await new Promise(r => setTimeout(r, 500));
+        attempts++;
+      }
       
       const response = await fetch(`${BACKEND_URL}/create-payment`, {
         method: "POST",

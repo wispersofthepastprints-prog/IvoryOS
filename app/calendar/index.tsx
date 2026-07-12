@@ -31,6 +31,7 @@ export default function CalendarScreen() {
 
       const user = session?.user;
       if (!user) return;
+      if (!user.email_confirmed_at) return;
 
       const { data: profile } = await supabase
         .from("photographers")
