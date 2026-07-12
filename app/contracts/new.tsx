@@ -59,11 +59,7 @@ export default function NewContractScreen() {
       }
 
       const user = session?.user;
-      if (!user) return;
-      if (!user.email_confirmed_at) return;
-      }
-
-      if (!user.email_confirmed_at) {
+      if (!user) return;      if (!user.email_confirmed_at) {
         Alert.alert("Email Not Verified", "Please verify your email first.");
         setLoading(false);
         return;
