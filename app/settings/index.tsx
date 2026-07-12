@@ -1,21 +1,33 @@
 import { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  TextInput,
+  Modal,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
-import * as WebBrowser from "expo-web-browser";
-import { signInWithGoogle, getStoredToken, clearStoredToken } from "../../lib/google-calendar";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
-const CLIENT_ID = "ca_UkHV4OfPSH1Uk98habHV7S2LUaMjuwOF";
-const PAYMENT_LINK = "https://buy.stripe.com/7sY7sLeWX68g3Qr2Vkgbm00";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signInWithGoogle } from "../../lib/google-calendar";
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Edit form state
+  const [editFullName, setEditFullName] = useState("");
+  const [editBusinessName, setEditBusinessName] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editPhone, setEditPhone] = useState("");
 
   useEffect(() => {
     fetchProfile();
@@ -24,19 +36,9 @@ export default function SettingsScreen() {
 
   const fetchProfile = async () => {
     try {
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) await new Promise((r) => setTimeout(r, 500));
-        attempts++;
-      }
+      const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+      if (!user) return;
 
       const { data, error } = await supabase
         .from("photographers")
@@ -46,23 +48,79 @@ export default function SettingsScreen() {
 
       if (error) {
         console.error("Profile fetch error:", error);
-      } else {
-        setProfile(data);
       }
-    } catch (err: any) {
-      console.error("Unexpected error:", err);
+
+      setProfile(data);
+
+      // Pre-fill edit form
+      if (data) {
+        setEditFullName(data.full_name || "");
+        setEditBusinessName(data.business_name || "");
+        setEditLocation(data.location || "");
+        setEditPhone(data.phone || "");
+      }
+    } catch (err) {
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   const checkGoogleConnection = async () => {
+    const token = await AsyncStorage.getItem("google_access_token");
+    setGoogleConnected(!!token);
+  };
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
     try {
-      const token = await getStoredToken();
-      setGoogleConnected(!!token);
-    } catch (err) {
-      console.error("Google connection check failed:", err);
-      setGoogleConnected(false);
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) {
+        Alert.alert("Error", "Not logged in");
+        return;
+      }
+
+      const updates = {
+        full_name: editFullName.trim() || null,
+        business_name: editBusinessName.trim() || null,
+        location: editLocation.trim() || null,
+        phone: editPhone.trim() || null,
+      };
+
+      if (profile) {
+        // Update existing
+        const { error } = await supabase
+          .from("photographers")
+          .update(updates)
+          .eq("auth_id", user.id);
+
+        if (error) throw error;
+      } else {
+        // Create new
+        const { error } = await supabase
+          .from("photographers")
+          .insert({
+            auth_id: user.id,
+            email: user.email,
+            ...updates,
+          });
+
+        if (error) throw error;
+      }
+
+      // Update auth metadata too
+      await supabase.auth.updateUser({
+        data: { full_name: editFullName.trim() },
+      });
+
+      Alert.alert("Success", "Profile updated!");
+      setEditModalVisible(false);
+      fetchProfile();
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -70,51 +128,26 @@ export default function SettingsScreen() {
     try {
       const token = await signInWithGoogle();
       if (token) {
+        await AsyncStorage.setItem("google_access_token", token);
         setGoogleConnected(true);
-        Alert.alert("Success", "Google Calendar connected! Bookings will now sync automatically.");
+        Alert.alert("Success", "Google Calendar connected!");
       }
     } catch (err: any) {
-      console.error("Google connect error:", err);
-      Alert.alert("Error", err.message || "Failed to connect Google Calendar.");
+      Alert.alert("Error", err.message);
     }
   };
 
   const handleDisconnectGoogle = async () => {
-    try {
-      await clearStoredToken();
-      setGoogleConnected(false);
-      Alert.alert("Disconnected", "Google Calendar disconnected.");
-    } catch (err: any) {
-      console.error("Google disconnect error:", err);
-    }
-  };
-
-  const handleUpgrade = async () => {
-    if (!PAYMENT_LINK) {
-      Alert.alert("Setup Required", "Payment link not configured yet.");
-      return;
-    }
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    const url = userId ? `${PAYMENT_LINK}?client_reference_id=${userId}` : PAYMENT_LINK;
-    await WebBrowser.openBrowserAsync(url);
-  };
-
-  const handleConnectBank = async () => {
-    if (!CLIENT_ID) {
-      Alert.alert("Error", "Stripe Connect not configured.");
-      return;
-    }
-    const redirectUri = "https://ewqbywvhgujwkqnxvuqi.supabase.co";
-    const connectUrl = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${CLIENT_ID}&scope=read_write&redirect_uri=${encodeURIComponent(redirectUri)}`;
-    await WebBrowser.openBrowserAsync(connectUrl);
+    await AsyncStorage.removeItem("google_access_token");
+    setGoogleConnected(false);
+    Alert.alert("Disconnected", "Google Calendar disconnected.");
   };
 
   const handleLogout = async () => {
-    Alert.alert("Logout", "Are you sure?", [
+    Alert.alert("Log Out", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Logout",
+        text: "Log Out",
         style: "destructive",
         onPress: async () => {
           await supabase.auth.signOut();
@@ -124,177 +157,349 @@ export default function SettingsScreen() {
     ]);
   };
 
+  const isPro = profile?.subscription_tier === "pro";
+  const isStudio = profile?.subscription_tier === "studio";
+
   if (loading) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <Text>Loading...</Text>
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#C9A227" style={{ marginTop: 100 }} />
       </View>
     );
   }
 
-  const isPro = profile?.subscription_tier === "pro";
-  const isStudio = profile?.subscription_tier === "studio";
-
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
-      </View>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.pageTitle}>Settings</Text>
 
-      <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>👤</Text>
+        {/* Profile Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {(profile?.full_name || "?").charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <Text style={styles.name}>
+            {profile?.full_name || "No name set"}
+          </Text>
+          <Text style={styles.email}>{profile?.email || ""}</Text>
+          <Text style={styles.business}>
+            {profile?.business_name || "No business name set"}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.editProfileButton}
+            onPress={() => setEditModalVisible(true)}
+          >
+            <Text style={styles.editProfileText}>✏️ Edit Profile</Text>
+          </TouchableOpacity>
         </View>
-        <Text style={styles.name}>{profile?.full_name || "Photographer"}</Text>
-        <Text style={styles.email}>{profile?.email || ""}</Text>
-        <Text style={styles.business}>{profile?.business_name || "Wispersofthepast"}</Text>
-      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>SUBSCRIPTION</Text>
-        <View style={styles.tierBadge}>
-          <Text style={styles.tierText}>
-            {isStudio ? "🏆 STUDIO" : isPro ? "⭐ PRO" : "🆓 FREE"}
-          </Text>
+        {/* Subscription */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
+          <View style={styles.subscriptionCard}>
+            <View style={styles.tierBadge}>
+              <Text style={styles.tierText}>
+                {isStudio ? "STUDIO" : isPro ? "PRO" : "FREE"}
+              </Text>
+            </View>
+            <Text style={styles.subText}>
+              {isStudio
+                ? "Unlimited everything"
+                : isPro
+                ? "Unlimited clients & bookings"
+                : "3 clients • 1 booking max"}
+            </Text>
+            {!isPro && !isStudio && (
+              <TouchableOpacity style={styles.upgradeButton}>
+                <Text style={styles.upgradeText}>Upgrade to Pro — $49/mo</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-        {!isPro && !isStudio && (
-          <>
-            <Text style={styles.limitText}>3 clients • 1 booking max</Text>
-            <TouchableOpacity style={styles.upgradeButton} onPress={handleUpgrade}>
-              <Text style={styles.upgradeText}>Upgrade to Pro — $49/mo</Text>
-            </TouchableOpacity>
-          </>
-        )}
-        {(isPro || isStudio) && (
-          <Text style={styles.activeText}>✅ Unlimited access active</Text>
-        )}
-      </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>INTEGRATIONS</Text>
-        <TouchableOpacity 
-          style={styles.settingRow} 
-          onPress={googleConnected ? handleDisconnectGoogle : handleConnectGoogle}
-        >
-          <Text style={styles.settingLabel}>
-            {googleConnected ? "🔓 Disconnect Google Calendar" : "🔗 Connect Google Calendar"}
-          </Text>
-          <Text style={[styles.settingValue, googleConnected && styles.connectedValue]}>
-            {googleConnected ? "Connected" : "Not connected"}
-          </Text>
-        </TouchableOpacity>
-      </View>
+        {/* Integrations */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>INTEGRATIONS</Text>
+          <TouchableOpacity
+            style={styles.row}
+            onPress={googleConnected ? handleDisconnectGoogle : handleConnectGoogle}
+          >
+            <Text style={styles.rowLabel}>
+              {googleConnected ? "🔓 Disconnect Google Calendar" : "🔗 Connect Google Calendar"}
+            </Text>
+            <Text style={styles.rowValue}>
+              {googleConnected ? "Connected" : "Not connected"}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>PAYOUTS</Text>
-        {profile?.stripe_connect_account_id ? (
-          <Text style={styles.connectedText}>✅ Bank account connected</Text>
-        ) : (
-          <>
-            <Text style={styles.limitText}>Connect your bank to receive payments</Text>
-            <TouchableOpacity style={styles.connectButton} onPress={handleConnectBank}>
+        {/* Payouts */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>PAYOUTS</Text>
+          <Text style={styles.subText}>Connect your bank to receive payments</Text>
+          {profile?.stripe_connect_account_id ? (
+            <View style={styles.connectedBadge}>
+              <Text style={styles.connectedText}>✅ Bank account connected</Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.connectButton}>
               <Text style={styles.connectText}>Connect Bank Account</Text>
             </TouchableOpacity>
-          </>
-        )}
-      </View>
+          )}
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>ACCOUNT</Text>
-        <Text style={styles.infoRow}>📍 {profile?.location || "Glen Innes, NSW"}</Text>
-        {profile?.phone && <Text style={styles.infoRow}>📞 {profile.phone}</Text>}
-        <Text style={styles.infoRow}>📅 Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString("en-AU") : "N/A"}</Text>
-      </View>
+        {/* Account Info */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ACCOUNT</Text>
+          <View style={styles.infoBlock}>
+            <Text style={styles.infoRow}>
+              📍 {profile?.location || "No location set"}
+            </Text>
+            {profile?.phone && (
+              <Text style={styles.infoRow}>📞 {profile.phone}</Text>
+            )}
+            <Text style={styles.infoRow}>
+              📅 Joined{" "}
+              {profile?.created_at
+                ? new Date(profile.created_at).toLocaleDateString("en-AU")
+                : "Recently"}
+            </Text>
+          </View>
+        </View>
 
-      <TouchableOpacity style={[styles.logoutButton, { marginBottom: Math.max(insets.bottom + 20, 40) }]} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {/* Logout */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+
+            <Text style={styles.inputLabel}>Full Name</Text>
+            <TextInput
+              style={styles.input}
+              value={editFullName}
+              onChangeText={setEditFullName}
+              placeholder="Your full name"
+            />
+
+            <Text style={styles.inputLabel}>Business Name</Text>
+            <TextInput
+              style={styles.input}
+              value={editBusinessName}
+              onChangeText={setEditBusinessName}
+              placeholder="Your business name"
+            />
+
+            <Text style={styles.inputLabel}>Location</Text>
+            <TextInput
+              style={styles.input}
+              value={editLocation}
+              onChangeText={setEditLocation}
+              placeholder="City, State"
+            />
+
+            <Text style={styles.inputLabel}>Phone</Text>
+            <TextInput
+              style={styles.input}
+              value={editPhone}
+              onChangeText={setEditPhone}
+              placeholder="0412 345 678"
+              keyboardType="phone-pad"
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={handleSaveProfile}
+                disabled={savingProfile}
+              >
+                <Text style={styles.saveButtonText}>
+                  {savingProfile ? "Saving..." : "Save"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F6F0" },
-  center: { justifyContent: "center", alignItems: "center" },
-  header: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 16 },
-  title: { fontSize: 28, fontWeight: "700", color: "#0A0A0A" },
+  scrollContent: { paddingBottom: 40 },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#0A0A0A",
+    paddingHorizontal: 24,
+    paddingTop: 60,
+    paddingBottom: 16,
+  },
   profileCard: {
     backgroundColor: "#0A0A0A",
     marginHorizontal: 24,
     borderRadius: 20,
     padding: 24,
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 16,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: "#C9A227",
-    justifyContent: "center",
     alignItems: "center",
+    justifyContent: "center",
     marginBottom: 12,
   },
-  avatarText: { fontSize: 36 },
-  name: { color: "#F8F6F0", fontSize: 22, fontWeight: "700" },
-  email: { color: "#999", fontSize: 14, marginTop: 4 },
-  business: { color: "#C9A227", fontSize: 14, marginTop: 2 },
-  card: {
+  avatarText: { fontSize: 28, fontWeight: "700", color: "#0A0A0A" },
+  name: { fontSize: 20, fontWeight: "700", color: "#FFFFFF", marginBottom: 4 },
+  email: { fontSize: 14, color: "#AAAAAA", marginBottom: 4 },
+  business: { fontSize: 14, color: "#C9A227", marginBottom: 16 },
+  editProfileButton: {
+    backgroundColor: "#C9A227",
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  editProfileText: { color: "#0A0A0A", fontWeight: "700", fontSize: 14 },
+  section: {
     backgroundColor: "#FFFFFF",
     marginHorizontal: 24,
+    marginBottom: 12,
     borderRadius: 16,
     padding: 20,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: "#E5E5E5",
   },
-  sectionLabel: { fontSize: 12, fontWeight: "700", color: "#999", letterSpacing: 1, marginBottom: 12 },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#999",
+    marginBottom: 12,
+    letterSpacing: 1,
+  },
+  subscriptionCard: { gap: 8 },
   tierBadge: {
     backgroundColor: "#F8F6F0",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 12,
     alignSelf: "flex-start",
-    marginBottom: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
-  tierText: { fontSize: 16, fontWeight: "700", color: "#0A0A0A" },
-  limitText: { fontSize: 14, color: "#666", marginBottom: 12 },
+  tierText: { fontSize: 14, fontWeight: "700", color: "#0A0A0A" },
+  subText: { fontSize: 14, color: "#666" },
   upgradeButton: {
     backgroundColor: "#C9A227",
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
+    marginTop: 8,
   },
-  upgradeText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700" },
-  activeText: { fontSize: 14, color: "#059669", fontWeight: "600" },
-  settingRow: {
+  upgradeText: { color: "#0A0A0A", fontWeight: "700", fontSize: 15 },
+  row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
+    paddingVertical: 8,
   },
-  settingLabel: { fontSize: 15, color: "#0A0A0A", fontWeight: "600" },
-  settingValue: { fontSize: 14, color: "#666" },
-  connectedValue: { color: "#059669", fontWeight: "600" },
-  connectedText: { fontSize: 14, color: "#059669", fontWeight: "600" },
+  rowLabel: { fontSize: 15, color: "#0A0A0A", fontWeight: "600" },
+  rowValue: { fontSize: 14, color: "#999" },
   connectButton: {
-    backgroundColor: "#DBEAFE",
+    backgroundColor: "#E8F0FE",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  connectText: { color: "#1A73E8", fontWeight: "700", fontSize: 15 },
+  connectedBadge: {
+    backgroundColor: "#E6F4EA",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  connectedText: { color: "#137333", fontWeight: "600" },
+  infoBlock: { gap: 8 },
+  infoRow: { fontSize: 15, color: "#0A0A0A" },
+  logoutButton: {
+    backgroundColor: "#FFE5E5",
+    marginHorizontal: 24,
+    marginTop: 8,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
   },
-  connectText: { color: "#2563EB", fontSize: 16, fontWeight: "700" },
-  infoRow: { fontSize: 15, color: "#0A0A0A", marginBottom: 8 },
-  logoutButton: {
-    backgroundColor: "#FEE2E2",
-    marginHorizontal: 24,
-    marginTop: 8,
-    marginBottom: 40,
-    paddingVertical: 18,
+  logoutText: { color: "#CC0000", fontWeight: "700", fontSize: 15 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#0A0A0A",
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  input: {
+    backgroundColor: "#F8F6F0",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    color: "#0A0A0A",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
   },
-  logoutText: { color: "#DC2626", fontSize: 16, fontWeight: "700" },
+  cancelButton: { backgroundColor: "#F8F6F0" },
+  cancelButtonText: { color: "#0A0A0A", fontWeight: "700" },
+  saveButton: { backgroundColor: "#C9A227" },
+  saveButtonText: { color: "#0A0A0A", fontWeight: "700" },
 });
