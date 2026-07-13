@@ -78,8 +78,20 @@ export default function PackagesScreen() {
         return;
       }
 
+      // Get photographer record
+      const { data: photographer } = await supabase
+        .from("photographers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!photographer) {
+        Alert.alert("Error", "Profile not found");
+        return;
+      }
+
       const { error } = await supabase.from("packages").insert({
-        auth_id: user.id,
+        photographer_id: photographer.id,
         name: name.trim(),
         description: description.trim(),
         price: parseFloat(price) || 0,

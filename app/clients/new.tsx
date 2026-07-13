@@ -59,8 +59,21 @@ export default function NewClientScreen() {
         return;
       }
 
+      // Get photographer record first
+      const { data: photographer } = await supabase
+        .from("photographers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!photographer) {
+        Alert.alert("Error", "Profile not found");
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.from("clients").insert({
-        auth_id: user.id,
+        photographer_id: photographer.id,
         full_name: fullName,
         partner_name: partnerName,
         email,

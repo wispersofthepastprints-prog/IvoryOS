@@ -74,7 +74,14 @@ export default function SettingsScreen() {
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      let session = null;
+      let attempts = 0;
+      while (!session && attempts < 3) {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+        if (!session) await new Promise(r => setTimeout(r, 500));
+        attempts++;
+      }
       const user = session?.user;
       if (!user) {
         Alert.alert("Error", "Not logged in");

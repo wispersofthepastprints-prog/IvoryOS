@@ -59,14 +59,28 @@ export default function NewContractScreen() {
       }
 
       const user = session?.user;
-      if (!user) return;      if (!user.email_confirmed_at) {
+      if (!user) return;
+      if (!user.email_confirmed_at) {
         Alert.alert("Email Not Verified", "Please verify your email first.");
         setLoading(false);
         return;
       }
 
+      // Get photographer record first
+      const { data: photographer } = await supabase
+        .from("photographers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!photographer) {
+        Alert.alert("Error", "Profile not found");
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.from("contracts").insert({
-        auth_id: user.id,
+        photographer_id: photographer.id,
         title: title.trim(),
         content: content.trim(),
       });

@@ -51,8 +51,21 @@ export default function NewBookingScreen() {
         return;
       }
 
+      // Get photographer record first
+      const { data: photographer } = await supabase
+        .from("photographers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!photographer) {
+        Alert.alert("Error", "Profile not found");
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.from("bookings").insert({
-        auth_id: user.id,
+        photographer_id: photographer.id,
         client_id: clientId,
         location,
         package_price: parseFloat(packagePrice),

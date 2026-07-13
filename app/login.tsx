@@ -2,6 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { signInWithEmail, signUpWithEmail, supabase } from "../lib/supabase";
+import PasswordInput from "../../components/PasswordInput";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -83,13 +84,11 @@ export default function LoginScreen() {
           keyboardType="email-address"
         />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#999"
+        <PasswordInput
           value={password}
           onChangeText={setPassword}
-          secureTextEntry
+          placeholder="Password"
+          style={styles.input}
         />
 
         <TouchableOpacity

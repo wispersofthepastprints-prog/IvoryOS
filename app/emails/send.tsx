@@ -64,8 +64,17 @@ export default function SendEmailScreen() {
       const user = session?.user;
         if (!user || !user.email_confirmed_at) return;
 
+      // Get photographer record
+      const { data: photographer } = await supabase
+        .from("photographers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!photographer) return;
+
       await supabase.from("emails").insert({
-        auth_id: user.id,
+        photographer_id: photographer.id,
         client_id: clientId || null,
         template_id: templateId || null,
         subject: subject,
