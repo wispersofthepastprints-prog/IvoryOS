@@ -95,26 +95,17 @@ export default function SettingsScreen() {
         phone: editPhone.trim() || null,
       };
 
-      if (profile) {
-        // Update existing
-        const { error } = await supabase
-          .from("photographers")
-          .update(updates)
-          .eq("auth_id", user.id);
+      const { error } = await supabase
+        .from("photographers")
+        .upsert({
+          auth_id: user.id,
+          email: user.email,
+          ...updates,
+        }, {
+          onConflict: 'auth_id',
+        });
 
-        if (error) throw error;
-      } else {
-        // Create new
-        const { error } = await supabase
-          .from("photographers")
-          .insert({
-            auth_id: user.id,
-            email: user.email,
-            ...updates,
-          });
-
-        if (error) throw error;
-      }
+      if (error) throw error;
 
       // Update auth metadata too
       await supabase.auth.updateUser({
