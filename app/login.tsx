@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { signInWithEmail, signUpWithEmail, supabase } from "../lib/supabase";
-import PasswordInput from "../../components/PasswordInput";
+import PasswordInput from "../components/PasswordInput";
 
 export default function LoginScreen() {
   const router = useRouter();
