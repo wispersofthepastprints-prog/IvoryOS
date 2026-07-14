@@ -20,7 +20,7 @@
       "bundleIdentifier": "com.wispersofthepast.ivoryos"
     },
     "android": {
-      "versionCode": 19,
+      "versionCode": 21,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F8F6F0"
