@@ -1,128 +1,266 @@
-import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, RefreshControl } from "react-native";
+import { useState, useEffect, useCallback } from "react";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  RefreshControl,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
-interface Invoice {
+type Invoice = {
   id: string;
-  client_name: string;
+  invoice_number: string | null;
   amount: number;
-  status: string;
+  status: "draft" | "sent" | "paid" | "overdue";
+  due_date: string | null;
+  client_id: string | null;
   created_at: string;
-  due_date?: string;
-}
+};
 
 export default function InvoicesScreen() {
   const router = useRouter();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [photographerId, setPhotographerId] = useState<string | null>(null);
 
-  const fetchInvoices = async () => {
+  /**
+   * Looks up the photographer row for the currently authenticated user.
+   * All downstream queries use photographer.id, never auth.uid() directly.
+   */
+  const resolvePhotographerId = async (): Promise<string | null> => {
     try {
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) await new Promise((r) => setTimeout(r, 500));
-        attempts++;
-      }
-      const user = session?.user;
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      if (!user.email_confirmed_at) {
-        setLoading(false);
-        return;
-      }
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (!user) return null;
 
       const { data, error } = await supabase
-        .from("invoices")
-        .select("*")
+        .from("photographers")
+        .select("id")
         .eq("auth_id", user.id)
+        .single();
+
+      if (error) {
+        console.error("[Invoices] photographer lookup error:", error.message);
+        return null;
+      }
+      return data?.id ?? null;
+    } catch (err) {
+      console.error("[Invoices] resolvePhotographerId exception:", err);
+      return null;
+    }
+  };
+
+  const fetchInvoices = useCallback(async () => {
+    if (!photographerId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("id, invoice_number, amount, status, due_date, client_id, created_at")
+        .eq("photographer_id", photographerId)
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error("[Invoices] fetch error:", error.message);
+        Alert.alert("Error", "Failed to load invoices. Please try again.");
+        return;
+      }
+
       setInvoices(data || []);
-    } catch (err: any) {
-      Alert.alert("Error", err.message);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    } catch (err) {
+      console.error("[Invoices] fetch exception:", err);
+      Alert.alert("Error", "Something went wrong loading invoices.");
     }
-  };
+  }, [photographerId]);
 
   useEffect(() => {
-    fetchInvoices();
+    let mounted = true;
+
+    const init = async () => {
+      const pid = await resolvePhotographerId();
+      if (!mounted) return;
+      setPhotographerId(pid);
+      setLoading(false);
+    };
+
+    init();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  const onRefresh = () => {
+  useEffect(() => {
+    if (photographerId) {
+      fetchInvoices();
+    }
+  }, [photographerId, fetchInvoices]);
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchInvoices();
+    await fetchInvoices();
+    setRefreshing(false);
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
-      case "paid": return "#059669";
-      case "sent": return "#2563EB";
-      case "draft": return "#999";
-      default: return "#999";
+      case "paid":
+        return "#22c55e";
+      case "overdue":
+        return "#ef4444";
+      case "sent":
+        return "#3b82f6";
+      default:
+        return "#9ca3af";
     }
   };
 
+  const renderItem = ({ item }: { item: Invoice }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => router.push(`/invoices/${item.id}` as any)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.cardHeader}>
+        <Text style={styles.invoiceNumber}>
+          {item.invoice_number || `Invoice #${item.id.slice(0, 8).toUpperCase()}`}
+        </Text>
+        <View
+          style={[
+            styles.statusBadge,
+            { backgroundColor: getStatusColor(item.status) + "20" },
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusText,
+              { color: getStatusColor(item.status) },
+            ]}
+          >
+            {item.status.toUpperCase()}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.amount}>${item.amount.toFixed(2)}</Text>
+
+      {item.due_date && (
+        <Text style={styles.meta}>
+          Due: {new Date(item.due_date).toLocaleDateString("en-AU")}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#C9A227" />
+        <Text style={styles.loadingText}>Loading invoices...</Text>
+      </View>
+    );
+  }
+
+  if (!photographerId) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>
+          Profile not found. Please complete your profile in Settings.
+        </Text>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Invoices</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => Alert.alert("Coming Soon", "Create invoice feature will be available in the next update.")}>
-          <Text style={styles.addButtonText}>+ New Invoice</Text>
+        <TouchableOpacity
+          style={styles.newButton}
+          onPress={() => router.push("/invoices/new" as any)}
+        >
+          <Text style={styles.newButtonText}>+ New Invoice</Text>
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <Text style={styles.loading}>Loading...</Text>
-      ) : invoices.length === 0 ? (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>No invoices yet</Text>
-          <Text style={styles.emptySubtext}>Invoices will appear here once created</Text>
-        </View>
-      ) : (
-        invoices.map((invoice) => (
-          <View key={invoice.id} style={styles.invoiceCard}>
-            <View style={styles.row}>
-              <Text style={styles.clientName}>{invoice.client_name || "Unknown Client"}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(invoice.status) + "20" }]}>
-                <Text style={[styles.statusText, { color: getStatusColor(invoice.status) }]}>
-                  {invoice.status?.toUpperCase() || "DRAFT"}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.amount}>${invoice.amount?.toLocaleString() || "0"}</Text>
-            {invoice.due_date && <Text style={styles.dueDate}>Due: {new Date(invoice.due_date).toLocaleDateString("en-AU")}</Text>}
+      <FlatList
+        data={invoices}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No invoices yet</Text>
+            <Text style={styles.emptySub}>
+              Tap "+ New Invoice" to create your first one
+            </Text>
           </View>
-        ))
-      )}
-    </ScrollView>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F6F0" },
-  header: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  loadingText: { marginTop: 12, color: "#6b7280", fontSize: 14 },
+  errorText: { color: "#ef4444", textAlign: "center", fontSize: 14, lineHeight: 20 },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    paddingTop: 60,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
   title: { fontSize: 28, fontWeight: "700", color: "#0A0A0A" },
-  addButton: { backgroundColor: "#C9A227", paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
-  addButtonText: { color: "#0A0A0A", fontWeight: "700", fontSize: 14 },
-  loading: { textAlign: "center", marginTop: 40, color: "#666" },
-  empty: { alignItems: "center", marginTop: 60, paddingHorizontal: 24 },
-  emptyText: { fontSize: 18, fontWeight: "600", color: "#0A0A0A", marginBottom: 8 },
-  emptySubtext: { fontSize: 14, color: "#666", textAlign: "center" },
-  invoiceCard: { backgroundColor: "#FFFFFF", marginHorizontal: 24, marginBottom: 12, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: "#E5E5E5" },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  clientName: { fontSize: 17, fontWeight: "700", color: "#0A0A0A", flex: 1 },
-  statusBadge: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12 },
-  statusText: { fontSize: 12, fontWeight: "600" },
-  amount: { fontSize: 20, fontWeight: "700", color: "#C9A227" },
-  dueDate: { fontSize: 13, color: "#999", marginTop: 4 },
+  newButton: {
+    backgroundColor: "#C9A227",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  newButtonText: { color: "#fff", fontWeight: "600", fontSize: 14 },
+  list: { padding: 16, paddingBottom: 40 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  invoiceNumber: { fontSize: 16, fontWeight: "600", color: "#0A0A0A", flex: 1 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
+  statusText: { fontSize: 11, fontWeight: "700" },
+  amount: { fontSize: 22, fontWeight: "700", color: "#0A0A0A", marginBottom: 4 },
+  meta: { fontSize: 13, color: "#6b7280" },
+  empty: { alignItems: "center", paddingVertical: 60 },
+  emptyTitle: { fontSize: 18, fontWeight: "600", color: "#9ca3af", marginBottom: 8 },
+  emptySub: { fontSize: 14, color: "#9ca3af" },
 });

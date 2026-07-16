@@ -1,231 +1,194 @@
 import { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, RefreshControl } from "react-native";
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
-interface EmailTemplate {
+type EmailTemplate = {
   id: string;
   name: string;
   subject: string;
-  body: string;
   category: string;
-}
+};
 
+/**
+ * Default templates served when the DB table is missing or empty.
+ * This prevents the screen from ever being blank or crashing.
+ */
 const DEFAULT_TEMPLATES: EmailTemplate[] = [
+  {
+    id: "inquiry-response",
+    name: "Inquiry Response",
+    subject: "Re: Your Photography Inquiry",
+    category: "Client",
+  },
   {
     id: "booking-confirmation",
     name: "Booking Confirmation",
-    category: "Booking",
-    subject: "Your Wedding Photography is Confirmed! 🎉",
-    body: `Hi {{CLIENT_NAME}},
-
-Great news — your wedding photography is officially confirmed!
-
-EVENT DETAILS
-Date: {{EVENT_DATE}}
-Location: {{EVENT_LOCATION}}
-Package: {{PACKAGE_NAME}}
-
-WHAT'S NEXT
-- I'll send you a pre-wedding questionnaire 2 weeks before your date
-- We'll schedule a final timeline call 1 week out
-- Your gallery will be delivered within 4-6 weeks after the wedding
-
-If you have any questions before then, just reply to this email.
-
-Looking forward to capturing your day!
-
-{{PHOTOGRAPHER_NAME}}
-{{PHOTOGRAPHER_PHONE}}
-{{PHOTOGRAPHER_EMAIL}}`
+    subject: "You're Booked! Next Steps",
+    category: "Client",
   },
   {
-    id: "pre-wedding-reminder",
-    name: "Pre-Wedding Reminder",
-    category: "Reminder",
-    subject: "One Week Until Your Wedding! 📸",
-    body: `Hi {{CLIENT_NAME}},
-
-Your wedding is just one week away! Here's a quick reminder of what to expect:
-
-PHOTOGRAPHY TIMELINE
-- Getting ready: {{START_TIME}}
-- Ceremony: {{CEREMONY_TIME}}
-- Reception: {{RECEPTION_TIME}}
-
-FINAL CHECKLIST
-□ Confirmed shot list
-□ Shared family photo list
-□ Backup indoor location (if weather is bad)
-□ Relaxed timeline with buffer time
-
-See you on {{EVENT_DATE}}!
-
-{{PHOTOGRAPHER_NAME}}`
+    id: "invoice-reminder",
+    name: "Invoice Reminder",
+    subject: "Friendly Payment Reminder",
+    category: "Business",
   },
   {
-    id: "post-wedding-followup",
-    name: "Post-Wedding Follow-up",
-    category: "Follow-up",
-    subject: "Your Wedding Photos Are Coming Soon 💕",
-    body: `Hi {{CLIENT_NAME}},
-
-Thank you for letting me be part of your wedding day! It was absolutely beautiful.
-
-DELIVERY TIMELINE
-- Sneak peek: 3-5 days
-- Full gallery: 4-6 weeks
-- Album design: 8-10 weeks
-
-You'll receive an email with your private gallery link as soon as it's ready.
-
-In the meantime, if you'd like to order prints or an album, just let me know!
-
-With love,
-{{PHOTOGRAPHER_NAME}}`
+    id: "gallery-delivery",
+    name: "Gallery Delivery",
+    subject: "Your Photos Are Ready",
+    category: "Client",
   },
   {
-    id: "contract-reminder",
-    name: "Contract Reminder",
-    category: "Contract",
-    subject: "Please Review & Sign Your Photography Agreement",
-    body: `Hi {{CLIENT_NAME}},
-
-Please find your wedding photography agreement attached. 
-
-To secure your date, please:
-1. Review the attached contract
-2. Sign and return via email
-3. Pay the deposit: {{DEPOSIT_AMOUNT}}
-
-Once I receive both, your date is officially locked in!
-
-Questions? Just reply to this email.
-
-{{PHOTOGRAPHER_NAME}}`
-  }
+    id: "testimonial-request",
+    name: "Testimonial Request",
+    subject: "A Quick Favor",
+    category: "Client",
+  },
+  {
+    id: "contract-follow-up",
+    name: "Contract Follow-up",
+    subject: "Contract Reminder",
+    category: "Business",
+  },
 ];
 
 export default function EmailsScreen() {
   const router = useRouter();
-  const [templates, setTemplates] = useState<EmailTemplate[]>(DEFAULT_TEMPLATES);
-  const [customTemplates, setCustomTemplates] = useState<EmailTemplate[]>([]);
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchCustomTemplates();
+    const fetchTemplates = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("emails")
+          .select("id, name, subject, category")
+          .order("category", { ascending: true });
+
+        // If the table is missing, empty, or RLS blocks it, fall back to defaults
+        if (error || !data || data.length === 0) {
+          console.log("[Emails] Using default templates. DB reason:", error?.message || "empty");
+          setTemplates(DEFAULT_TEMPLATES);
+        } else {
+          setTemplates(data);
+        }
+      } catch (err) {
+        console.error("[Emails] Exception loading templates:", err);
+        setTemplates(DEFAULT_TEMPLATES);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTemplates();
   }, []);
 
-  const fetchCustomTemplates = async () => {
+  const handlePress = (template: EmailTemplate) => {
     try {
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) await new Promise(r => setTimeout(r, 500));
-        attempts++;
-      }
-      const user = session?.user;
-      if (!user) return;
-      if (!user.email_confirmed_at) return;
-
-      const { data, error } = await supabase
-        .from("email_templates")
-        .select("*")
-        .eq("auth_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setCustomTemplates(data || []);
-    } catch (err: any) {
-      console.error("Error fetching templates:", err);
-    } finally {
-      setLoading(false);
+      // Safe navigation with pathname object
+      router.push({
+        pathname: "/emails/template",
+        params: { id: template.id, name: template.name },
+      });
+    } catch (err) {
+      // If the route doesn't exist, alert instead of crashing
+      console.error("[Emails] Navigation error:", err);
+      Alert.alert("Coming Soon", `${template.name} editing is not yet available.`);
     }
   };
 
-  const handleSend = (template: EmailTemplate) => {
-    router.push({
-      pathname: "/emails/send",
-      params: {
-        templateId: template.id,
-        subject: template.subject,
-        body: template.body,
-      },
-    });
-  };
+  const renderItem = ({ item }: { item: EmailTemplate }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => handlePress(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.cardHeader}>
+        <Text style={styles.name}>{item.name}</Text>
+        <View style={styles.categoryBadge}>
+          <Text style={styles.categoryText}>{item.category}</Text>
+        </View>
+      </View>
+      <Text style={styles.subject}>{item.subject}</Text>
+    </TouchableOpacity>
+  );
 
-  const allTemplates = [...templates, ...customTemplates];
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#C9A227" />
+        <Text style={styles.loadingText}>Loading templates...</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Email Templates</Text>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Pre-Built Templates</Text>
-        {templates.map((template) => (
-          <TouchableOpacity
-            key={template.id}
-            style={styles.templateCard}
-            onPress={() => handleSend(template)}
-          >
-            <View style={styles.templateHeader}>
-              <Text style={styles.templateName}>{template.name}</Text>
-              <View style={[styles.categoryBadge, { backgroundColor: getCategoryColor(template.category) }]}>
-                <Text style={styles.categoryText}>{template.category}</Text>
-              </View>
-            </View>
-            <Text style={styles.templateSubject} numberOfLines={1}>{template.subject}</Text>
-            <Text style={styles.templatePreview} numberOfLines={2}>{template.body.substring(0, 100)}...</Text>
-            <Text style={styles.sendText}>Tap to send →</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {customTemplates.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Custom Templates</Text>
-          {customTemplates.map((template) => (
-            <TouchableOpacity
-              key={template.id}
-              style={styles.templateCard}
-              onPress={() => handleSend(template)}
-            >
-              <Text style={styles.templateName}>{template.name}</Text>
-              <Text style={styles.templateSubject} numberOfLines={1}>{template.subject}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+      <FlatList
+        data={templates}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No templates found</Text>
+          </View>
+        }
+      />
+    </View>
   );
-}
-
-function getCategoryColor(category: string): string {
-  const colors: Record<string, string> = {
-    "Booking": "#E8F5E9",
-    "Reminder": "#FFF3E0",
-    "Follow-up": "#E3F2FD",
-    "Contract": "#F3E5F5",
-  };
-  return colors[category] || "#F5F5F5";
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F6F0" },
-  header: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 16 },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: { marginTop: 12, color: "#6b7280", fontSize: 14 },
+  header: { padding: 20, paddingTop: 60, backgroundColor: "#fff" },
   title: { fontSize: 28, fontWeight: "700", color: "#0A0A0A" },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 16, fontWeight: "700", color: "#0A0A0A", marginHorizontal: 24, marginBottom: 12, marginTop: 8 },
-  templateCard: { backgroundColor: "#FFFFFF", marginHorizontal: 24, marginBottom: 12, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: "#E5E5E5" },
-  templateHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  templateName: { fontSize: 17, fontWeight: "700", color: "#0A0A0A", flex: 1 },
-  categoryBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  categoryText: { fontSize: 12, fontWeight: "600", color: "#333" },
-  templateSubject: { fontSize: 14, color: "#666", marginBottom: 6 },
-  templatePreview: { fontSize: 13, color: "#999", lineHeight: 18, marginBottom: 8 },
-  sendText: { fontSize: 14, fontWeight: "600", color: "#C9A227" },
+  list: { padding: 16, paddingBottom: 40 },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  name: { fontSize: 16, fontWeight: "600", color: "#0A0A0A", flex: 1 },
+  categoryBadge: {
+    backgroundColor: "#F8F6F0",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  categoryText: { fontSize: 12, color: "#6b7280", fontWeight: "500" },
+  subject: { fontSize: 14, color: "#6b7280" },
+  empty: { alignItems: "center", paddingVertical: 60 },
+  emptyTitle: { fontSize: 16, color: "#9ca3af" },
 });
