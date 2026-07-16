@@ -1,14 +1,16 @@
-import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Platform } from "react-native";
+import { useState, useEffect } from "react";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Platform, Modal } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createCalendarEvent } from "../../lib/google-calendar";
 
 export default function NewBookingScreen() {
   const router = useRouter();
   const [clientId, setClientId] = useState("");
+  const [clientName, setClientName] = useState("");
+  const [clients, setClients] = useState<any[]>([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [location, setLocation] = useState("");
   const [packagePrice, setPackagePrice] = useState("");
   const [packageDescription, setPackageDescription] = useState("");
@@ -17,6 +19,51 @@ export default function NewBookingScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [status, setStatus] = useState("inquiry");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchClients();
+  }, []);
+
+  const fetchClients = async () => {
+    try {
+      let session = null;
+      let attempts = 0;
+      while (!session && attempts < 3) {
+        const { data } = await supabase.auth.getSession();
+        session = data?.session;
+        if (!session) await new Promise(r => setTimeout(r, 500));
+        attempts++;
+      }
+      const user = session?.user;
+      if (!user) return;
+
+      const { data: photographer } = await supabase
+        .from("photographers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!photographer) return;
+
+      const { data: clientsData } = await supabase
+        .from("clients")
+        .select("id, full_name, partner_name")
+        .eq("photographer_id", photographer.id)
+        .order("full_name", { ascending: true });
+
+      setClients(clientsData || []);
+    } catch (err) {
+      console.error("Fetch clients error:", err);
+    }
+  };
+
+  const selectClient = (client: any) => {
+    setClientId(client.id);
+    setClientName(client.partner_name 
+      ? `${client.full_name} & ${client.partner_name}` 
+      : client.full_name);
+    setShowClientDropdown(false);
+  };
 
   const onDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(Platform.OS === "ios");
@@ -78,7 +125,7 @@ export default function NewBookingScreen() {
       if (error) {
         Alert.alert("Error", error.message);
       } else {
-        // Sync to Google Calendar        // Sync to Google Calendar (optional — don't fail if it doesn't work)
+        // Sync to Google Calendar (optional)
         try {
           const { getStoredToken, createCalendarEvent } = await import("../../lib/google-calendar");
           const googleToken = await getStoredToken();
@@ -96,10 +143,9 @@ export default function NewBookingScreen() {
               startDate: eventDate.toISOString().split("T")[0],
               endDate: eventDate.toISOString().split("T")[0],
             });
-            console.log("✅ Synced to Google Calendar");
+            console.log("Synced to Google Calendar");
           }
         } catch (calendarErr) {
-          // Silently fail — booking is already saved
           console.log("Google Calendar sync skipped:", calendarErr);
         }
 
@@ -119,8 +165,16 @@ export default function NewBookingScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>Client ID *</Text>
-        <TextInput style={styles.input} value={clientId} onChangeText={setClientId} placeholder="Select a client from your list" />
+        <Text style={styles.label}>Client *</Text>
+        <TouchableOpacity 
+          style={styles.clientPicker} 
+          onPress={() => setShowClientDropdown(true)}
+        >
+          <Text style={clientName ? styles.clientPickerText : styles.clientPickerPlaceholder}>
+            {clientName || "Select a client from your list"}
+          </Text>
+          <Text style={styles.chevron}>▼</Text>
+        </TouchableOpacity>
 
         <Text style={styles.label}>Location</Text>
         <TextInput style={styles.input} value={location} onChangeText={setLocation} placeholder="Wedding venue address" />
@@ -173,6 +227,59 @@ export default function NewBookingScreen() {
       <TouchableOpacity style={[styles.saveButton, loading && styles.disabled]} onPress={handleSave} disabled={loading}>
         <Text style={styles.saveButtonText}>{loading ? "Saving..." : "Save Booking"}</Text>
       </TouchableOpacity>
+
+      {/* Client Dropdown Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showClientDropdown}
+        onRequestClose={() => setShowClientDropdown(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Client</Text>
+              <TouchableOpacity onPress={() => setShowClientDropdown(false)}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {clients.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No clients yet</Text>
+                <TouchableOpacity 
+                  style={styles.addClientButton}
+                  onPress={() => {
+                    setShowClientDropdown(false);
+                    router.push("/clients/new");
+                  }}
+                >
+                  <Text style={styles.addClientText}>Add your first client</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <ScrollView style={styles.clientList}>
+                {clients.map((client) => (
+                  <TouchableOpacity
+                    key={client.id}
+                    style={[
+                      styles.clientItem,
+                      clientId === client.id && styles.clientItemSelected
+                    ]}
+                    onPress={() => selectClient(client)}
+                  >
+                    <Text style={styles.clientItemName}>
+                      {client.full_name}
+                      {client.partner_name ? ` & ${client.partner_name}` : ""}
+                    </Text>
+                    {clientId === client.id && <Text style={styles.checkmark}>✓</Text>}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -185,6 +292,20 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: "600", color: "#0A0A0A", marginBottom: 8, marginTop: 12 },
   input: { backgroundColor: "#F8F6F0", paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: "#E5E5E5", color: "#0A0A0A" },
   textArea: { height: 100, textAlignVertical: "top" },
+  clientPicker: { 
+    backgroundColor: "#F8F6F0", 
+    paddingVertical: 14, 
+    paddingHorizontal: 16, 
+    borderRadius: 12, 
+    borderWidth: 1, 
+    borderColor: "#E5E5E5",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  clientPickerText: { fontSize: 15, color: "#0A0A0A", flex: 1 },
+  clientPickerPlaceholder: { fontSize: 15, color: "#999", flex: 1 },
+  chevron: { fontSize: 12, color: "#999" },
   dateButton: { backgroundColor: "#F8F6F0", paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: "#E5E5E5" },
   dateButtonText: { fontSize: 15, color: "#0A0A0A" },
   statusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
@@ -195,4 +316,27 @@ const styles = StyleSheet.create({
   saveButton: { backgroundColor: "#C9A227", marginHorizontal: 24, marginTop: 8, marginBottom: 40, paddingVertical: 18, borderRadius: 12, alignItems: "center" },
   disabled: { opacity: 0.6 },
   saveButtonText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, maxHeight: "70%" },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#0A0A0A" },
+  closeButton: { fontSize: 20, color: "#999", padding: 4 },
+  clientList: { maxHeight: 400 },
+  clientItem: { 
+    flexDirection: "row", 
+    justifyContent: "space-between", 
+    alignItems: "center",
+    paddingVertical: 16, 
+    paddingHorizontal: 16, 
+    borderRadius: 12, 
+    marginBottom: 8,
+    backgroundColor: "#F8F6F0",
+  },
+  clientItemSelected: { backgroundColor: "#C9A227" },
+  clientItemName: { fontSize: 15, fontWeight: "600", color: "#0A0A0A" },
+  checkmark: { fontSize: 16, fontWeight: "700", color: "#0A0A0A" },
+  emptyState: { alignItems: "center", paddingVertical: 40 },
+  emptyText: { fontSize: 16, color: "#999", marginBottom: 16 },
+  addClientButton: { backgroundColor: "#C9A227", paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12 },
+  addClientText: { color: "#0A0A0A", fontWeight: "700", fontSize: 15 },
 });
