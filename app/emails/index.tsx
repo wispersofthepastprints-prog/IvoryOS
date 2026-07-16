@@ -18,47 +18,13 @@ type EmailTemplate = {
   category: string;
 };
 
-/**
- * Default templates served when the DB table is missing or empty.
- * This prevents the screen from ever being blank or crashing.
- */
 const DEFAULT_TEMPLATES: EmailTemplate[] = [
-  {
-    id: "inquiry-response",
-    name: "Inquiry Response",
-    subject: "Re: Your Photography Inquiry",
-    category: "Client",
-  },
-  {
-    id: "booking-confirmation",
-    name: "Booking Confirmation",
-    subject: "You're Booked! Next Steps",
-    category: "Client",
-  },
-  {
-    id: "invoice-reminder",
-    name: "Invoice Reminder",
-    subject: "Friendly Payment Reminder",
-    category: "Business",
-  },
-  {
-    id: "gallery-delivery",
-    name: "Gallery Delivery",
-    subject: "Your Photos Are Ready",
-    category: "Client",
-  },
-  {
-    id: "testimonial-request",
-    name: "Testimonial Request",
-    subject: "A Quick Favor",
-    category: "Client",
-  },
-  {
-    id: "contract-follow-up",
-    name: "Contract Follow-up",
-    subject: "Contract Reminder",
-    category: "Business",
-  },
+  { id: "inquiry-response", name: "Inquiry Response", subject: "Re: Your Photography Inquiry", category: "Client" },
+  { id: "booking-confirmation", name: "Booking Confirmation", subject: "You're Booked! Next Steps", category: "Client" },
+  { id: "invoice-reminder", name: "Invoice Reminder", subject: "Friendly Payment Reminder", category: "Business" },
+  { id: "gallery-delivery", name: "Gallery Delivery", subject: "Your Photos Are Ready", category: "Client" },
+  { id: "testimonial-request", name: "Testimonial Request", subject: "A Quick Favor", category: "Client" },
+  { id: "contract-follow-up", name: "Contract Follow-up", subject: "Contract Reminder", category: "Business" },
 ];
 
 export default function EmailsScreen() {
@@ -74,15 +40,14 @@ export default function EmailsScreen() {
           .select("id, name, subject, category")
           .order("category", { ascending: true });
 
-        // If the table is missing, empty, or RLS blocks it, fall back to defaults
         if (error || !data || data.length === 0) {
-          console.log("[Emails] Using default templates. DB reason:", error?.message || "empty");
+          console.log("[Emails] Using defaults. Reason:", error?.message || "empty");
           setTemplates(DEFAULT_TEMPLATES);
         } else {
           setTemplates(data);
         }
       } catch (err) {
-        console.error("[Emails] Exception loading templates:", err);
+        console.error("[Emails] Exception:", err);
         setTemplates(DEFAULT_TEMPLATES);
       } finally {
         setLoading(false);
@@ -93,25 +58,15 @@ export default function EmailsScreen() {
   }, []);
 
   const handlePress = (template: EmailTemplate) => {
-    try {
-      // Safe navigation with pathname object
-      router.push({
-        pathname: "/emails/template",
-        params: { id: template.id, name: template.name },
-      });
-    } catch (err) {
-      // If the route doesn't exist, alert instead of crashing
-      console.error("[Emails] Navigation error:", err);
-      Alert.alert("Coming Soon", `${template.name} editing is not yet available.`);
-    }
+    // Navigate to the template editor with the template ID
+    router.push({
+      pathname: "/emails/template",
+      params: { id: template.id, name: template.name },
+    });
   };
 
   const renderItem = ({ item }: { item: EmailTemplate }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => handlePress(item)}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity style={styles.card} onPress={() => handlePress(item)} activeOpacity={0.7}>
       <View style={styles.cardHeader}>
         <Text style={styles.name}>{item.name}</Text>
         <View style={styles.categoryBadge}>
@@ -154,11 +109,7 @@ export default function EmailsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F6F0" },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 12, color: "#6b7280", fontSize: 14 },
   header: { padding: 20, paddingTop: 60, backgroundColor: "#fff" },
   title: { fontSize: 28, fontWeight: "700", color: "#0A0A0A" },
