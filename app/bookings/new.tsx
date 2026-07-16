@@ -111,9 +111,16 @@ export default function NewBookingScreen() {
         return;
       }
 
+      // Get client name for auto-title
+      const selectedClient = clients.find(c => c.id === clientId);
+      const autoTitle = selectedClient 
+        ? `Wedding: ${selectedClient.full_name}${selectedClient.partner_name ? ` & ${selectedClient.partner_name}` : ''}`
+        : 'New Booking';
+
       const { error } = await supabase.from("bookings").insert({
         photographer_id: photographer.id,
         client_id: clientId,
+        title: autoTitle,
         location,
         package_price: parseFloat(packagePrice),
         package_description: packageDescription,
