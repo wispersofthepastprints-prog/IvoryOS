@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { supabase } from "../../lib/supabase";
+import { supabase, getValidUser } from "../../lib/supabase";
 import * as WebBrowser from "expo-web-browser";
 
 const BACKEND_URL = "https://ewqbywvhgujwkqnxvuqi.supabase.co/functions/v1";
@@ -16,81 +16,124 @@ export default function BookingDetailScreen() {
   useEffect(() => { fetchBooking(); }, [id]);
 
   const fetchBooking = async () => {
-    const { data } = await supabase
-      .from("bookings")
-      .select("*, clients(*)")
-      .eq("id", id)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*, clients(*)")
+        .eq("id", id)
+        .single();
 
-    setBooking(data);
-    setClient(data?.clients || null);
-    setLoading(false);
+      if (error) {
+        console.error("[BookingDetail] fetch error:", error.message);
+        Alert.alert("Error", "Could not load booking details.");
+      }
+
+      setBooking(data);
+      setClient(data?.clients || null);
+    } catch (err) {
+      console.error("[BookingDetail] exception:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const createPayment = async (type: "deposit" | "balance") => {
     try {
-      const amount = type === "deposit" ? booking.deposit_amount : booking.balance_due;
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) await new Promise(r => setTimeout(r, 500));
-        attempts++;
+      // Validate booking has required financial fields
+      const amount = type === "deposit" ? booking?.deposit_amount : booking?.balance_due;
+
+      if (!amount || amount <= 0) {
+        Alert.alert(
+          "Missing Payment Amount",
+          `This booking does not have a ${type} amount set. Please edit the booking to add a ${type} amount.`,
+          [{ text: "OK" }]
+        );
+        return;
       }
-      
+
+      if (!client?.email) {
+        Alert.alert("No Client Email", "The client does not have an email address. Add one in the client profile.");
+        return;
+      }
+
+      const user = await getValidUser();
+      if (!user) {
+        Alert.alert("Session Expired", "Please log out and log back in.");
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      if (!accessToken) {
+        Alert.alert("Authentication Error", "Could not get access token. Please log in again.");
+        return;
+      }
+
       const response = await fetch(`${BACKEND_URL}/create-payment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token || ""}`,
+          "Authorization": `Bearer ${accessToken}`,
         },
         body: JSON.stringify({
           booking_id: booking.id,
           photographer_id: booking.photographer_id,
           type,
           amount,
-          client_email: client?.email,
-          description: `${booking.title} - ${type === "deposit" ? "Deposit" : "Balance"}`,
+          client_email: client.email,
+          description: `${booking.title || "Booking"} - ${type === "deposit" ? "Deposit" : "Balance"}`,
         }),
       });
 
       const result = await response.json();
+
       if (result.url) {
         await WebBrowser.openBrowserAsync(result.url);
-      } else if (result.error?.includes("not connected")) {
+        fetchBooking(); // Refresh after payment
+      } else if (result.error?.includes("not connected") || result.error?.includes("stripe")) {
         Alert.alert(
           "Bank Account Required",
           "You need to connect your bank account in Settings before you can send invoices to clients.",
           [
             { text: "Cancel", style: "cancel" },
-            { 
-              text: "Connect Bank", 
-              onPress: () => router.push("/settings")
-            }
+            { text: "Connect Bank", onPress: () => router.push("/settings") }
           ]
         );
       } else {
         Alert.alert("Error", result.error || "Could not create payment");
       }
     } catch (err: any) {
-      Alert.alert("Error", err.message);
+      Alert.alert("Error", err.message || "Something went wrong creating the payment.");
     }
   };
 
   const updateStatus = async (status: string) => {
-    const { error } = await supabase
-      .from("bookings")
-      .update({ status, ...(status === "contracted" ? { contract_sent_at: new Date().toISOString() } : {}) })
-      .eq("id", id);
+    try {
+      const { error } = await supabase
+        .from("bookings")
+        .update({ 
+          status, 
+          ...(status === "contracted" ? { contract_sent_at: new Date().toISOString() } : {}) 
+        })
+        .eq("id", id);
 
-    if (!error) {
-      Alert.alert("Success", `Status updated to ${status}`);
-      fetchBooking();
+      if (error) {
+        Alert.alert("Error", error.message);
+      } else {
+        Alert.alert("Success", `Status updated to ${status}`);
+        fetchBooking();
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
     }
   };
 
-  const formatCurrency = (cents: number) => `$${(cents / 100).toLocaleString()}`;
+  const formatCurrency = (cents: number | null | undefined) => {
+    if (!cents || cents <= 0) return "$0";
+    return `$${(cents / 100).toLocaleString()}`;
+  };
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "TBA";
     return new Date(dateStr).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -121,7 +164,7 @@ export default function BookingDetailScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>{booking.title}</Text>
+        <Text style={styles.title}>{booking.title || "Booking"}</Text>
         <View style={{ width: 50 }} />
       </View>
 
@@ -159,7 +202,7 @@ export default function BookingDetailScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.sectionLabel}>STATUS: {booking.status.toUpperCase()}</Text>
+        <Text style={styles.sectionLabel}>STATUS: {booking.status?.toUpperCase() || "UNKNOWN"}</Text>
 
         {booking.status === "inquiry" && (
           <TouchableOpacity style={styles.actionButton} onPress={() => updateStatus("contracted")}>
