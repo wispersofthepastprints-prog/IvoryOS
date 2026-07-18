@@ -34,7 +34,30 @@ export const signOut = async () => {
   return { error };
 };
 
+/**
+ * DEPRECATED: getSession() returns stale tokens from storage.
+ * Use getValidUser() instead which validates the token with the server.
+ */
 export const getCurrentUser = async () => {
   const { data: { session } } = await supabase.auth.getSession();
   return session?.user ?? null;
+};
+
+/**
+ * Validates the current session by hitting the Supabase server.
+ * This forces a token refresh if the token is expired.
+ * Returns the user object or null if the session is invalid.
+ */
+export const getValidUser = async () => {
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      console.error("[Auth] Session invalid:", error?.message);
+      return null;
+    }
+    return user;
+  } catch (err) {
+    console.error("[Auth] getValidUser exception:", err);
+    return null;
+  }
 };

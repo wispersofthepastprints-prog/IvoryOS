@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Platform } from "react-native";
 import { useRouter } from "expo-router";
-import { supabase } from "../../lib/supabase";
+import { supabase, getValidUser } from "../../lib/supabase";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function NewClientScreen() {
@@ -31,25 +31,13 @@ export default function NewClientScreen() {
 
     setLoading(true);
     try {
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-        }
-        attempts++;
-      }
-
-      const user = session?.user;
+      const user = await getValidUser();
       if (!user) {
         Alert.alert("Session Expired", "Please log out and log back in to continue.");
         setLoading(false);
         return;
       }
 
-      // NEW: Check if email is verified
       if (!user.email_confirmed_at) {
         Alert.alert(
           "Email Not Verified",
@@ -59,7 +47,6 @@ export default function NewClientScreen() {
         return;
       }
 
-      // Get photographer record first
       const { data: photographer } = await supabase
         .from("photographers")
         .select("id")

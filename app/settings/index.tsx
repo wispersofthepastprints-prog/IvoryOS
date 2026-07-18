@@ -74,14 +74,7 @@ export default function SettingsScreen() {
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     try {
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) await new Promise(r => setTimeout(r, 500));
-        attempts++;
-      }
+      const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (!user) {
         Alert.alert("Error", "Not logged in");
@@ -95,17 +88,26 @@ export default function SettingsScreen() {
         phone: editPhone.trim() || null,
       };
 
-      const { error } = await supabase
-        .from("photographers")
-        .upsert({
-          auth_id: user.id,
-          email: user.email,
-          ...updates,
-        }, {
-          onConflict: 'auth_id',
-        });
+      if (profile) {
+        // Update existing
+        const { error } = await supabase
+          .from("photographers")
+          .update(updates)
+          .eq("auth_id", user.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        // Create new
+        const { error } = await supabase
+          .from("photographers")
+          .insert({
+            auth_id: user.id,
+            email: user.email,
+            ...updates,
+          });
+
+        if (error) throw error;
+      }
 
       // Update auth metadata too
       await supabase.auth.updateUser({
