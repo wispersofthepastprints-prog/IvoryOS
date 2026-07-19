@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert, RefreshControl } from "react-native";
 import { useRouter } from "expo-router";
-import { supabase } from "../../lib/supabase";
+import { supabase, getValidUser } from "../../lib/supabase";
 
 interface Package {
   id: string;
@@ -27,22 +27,23 @@ export default function PackagesScreen() {
 
   const fetchPackages = async () => {
     try {
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) await new Promise(r => setTimeout(r, 500));
-        attempts++;
-      }
-      const user = session?.user;
+      const user = await getValidUser();
       if (!user) return;
       if (!user.email_confirmed_at) return;
+
+      // Look up photographer by auth_id
+      const { data: photographer } = await supabase
+        .from("photographers")
+        .select("id")
+        .eq("auth_id", user.id)
+        .single();
+
+      if (!photographer) return;
 
       const { data, error } = await supabase
         .from("packages")
         .select("*")
-        .eq("auth_id", user.id)
+        .eq("photographer_id", photographer.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -71,8 +72,7 @@ export default function PackagesScreen() {
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
+      const user = await getValidUser();
       if (!user) {
         Alert.alert("Error", "Not logged in");
         return;
