@@ -1,175 +1,189 @@
 import { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, Linking } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { supabase } from "../../lib/supabase";
+import { supabase, getValidUser } from "../../lib/supabase";
 
 export default function SendEmailScreen() {
   const router = useRouter();
-  const { templateId, subject: initialSubject, body: initialBody, contractId, clientId } = useLocalSearchParams();
+  const { templateId, clientId } = useLocalSearchParams<{ templateId?: string; clientId?: string }>();
 
-  const [to, setTo] = useState("");
-  const [subject, setSubject] = useState((initialSubject as string) || "");
-  const [body, setBody] = useState((initialBody as string) || "");
-  const [clientName, setClientName] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [template, setTemplate] = useState<any>(null);
+  const [client, setClient] = useState<any>(null);
+  const [photographer, setPhotographer] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
 
   useEffect(() => {
-    if (clientId) {
-      fetchClientEmail(clientId as string);
-    }
-  }, [clientId]);
+    loadData();
+  }, []);
 
-  const fetchClientEmail = async (id: string) => {
+  const loadData = async () => {
     try {
-      const { data, error } = await supabase.from("clients").select("email, full_name").eq("id", id).single();
-      if (error) throw error;
-      if (data) {
-        setTo(data.email || "");
-        setClientName(data.full_name || "");
+      const user = await getValidUser();
+      if (!user) {
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error("Error fetching client:", err);
-    }
-  };
 
-  const replaceVariables = (text: string) => {
-    return text
-      .replace(/{{CLIENT_NAME}}/g, clientName || "Client")
-      .replace(/{{PHOTOGRAPHER_NAME}}/g, "Your Photographer")
-      .replace(/{{EVENT_DATE}}/g, "[Event Date]")
-      .replace(/{{EVENT_LOCATION}}/g, "[Location]")
-      .replace(/{{PACKAGE_NAME}}/g, "[Package]")
-      .replace(/{{DEPOSIT_AMOUNT}}/g, "[Deposit Amount]");
-  };
-
-  const handleSend = async () => {
-    if (!to.trim() || !subject.trim() || !body.trim()) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
-    }
-
-    const finalBody = replaceVariables(body);
-    const mailtoUrl = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(finalBody)}`;
-
-    try {
-      // Log the email
-      let session = null;
-      let attempts = 0;
-      while (!session && attempts < 3) {
-        const { data } = await supabase.auth.getSession();
-        session = data?.session;
-        if (!session) await new Promise(r => setTimeout(r, 500));
-        attempts++;
-      }
-      const user = session?.user;
-        if (!user || !user.email_confirmed_at) return;
-
-      // Get photographer record
-      const { data: photographer } = await supabase
+      // Get photographer
+      const { data: photog } = await supabase
         .from("photographers")
-        .select("id")
+        .select("full_name, business_name, email, phone")
         .eq("auth_id", user.id)
         .single();
 
-      if (!photographer) return;
+      setPhotographer(photog);
 
-      await supabase.from("emails").insert({
-        photographer_id: photographer.id,
-        client_id: clientId || null,
-        template_id: templateId || null,
-        subject: subject,
-        body: finalBody,
-        recipient: to,
-      });
+      // Get template
+      if (templateId) {
+        const { data: tmpl } = await supabase
+          .from("emails")
+          .select("*")
+          .eq("id", templateId)
+          .single();
+        setTemplate(tmpl);
+        if (tmpl) {
+          setSubject(tmpl.subject || "");
+          setBody(tmpl.body || "");
+        }
+      }
 
-      // Open mail client
-      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      // Get client
+      if (clientId) {
+        const { data: cl } = await supabase
+          .from("clients")
+          .select("*")
+          .eq("id", clientId)
+          .single();
+        setClient(cl);
+      }
+    } catch (err) {
+      console.error("[SendEmail] load error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const replaceVariables = (text: string): string => {
+    if (!text) return "";
+    return text
+      .replace(/\{\{CLIENT_NAME\}\}/g, client?.full_name || "Client")
+      .replace(/\{\{EVENT_DATE\}\}/g, client?.wedding_date || "TBA")
+      .replace(/\{\{EVENT_LOCATION\}\}/g, client?.address || "TBA")
+      .replace(/\{\{PACKAGE_NAME\}\}/g, "Package")
+      .replace(/\{\{TOTAL_PRICE\}\}/g, "$0")
+      .replace(/\{\{PHOTOGRAPHER_NAME\}\}/g, photographer?.full_name || "Photographer")
+      .replace(/\{\{photographer_name\}\}/g, photographer?.full_name || "Photographer")
+      .replace(/\{\{client_name\}\}/g, client?.full_name || "Client")
+      .replace(/\{\{event_date\}\}/g, client?.wedding_date || "TBA")
+      .replace(/\{\{event_location\}\}/g, client?.address || "TBA")
+      .replace(/\{\{invoice_number\}\}/g, "INV-000")
+      .replace(/\{\{invoice_amount\}\}/g, "$0")
+      .replace(/\{\{due_date\}\}/g, "TBA")
+      .replace(/\{\{gallery_link\}\}/g, "[Gallery Link]");
+  };
+
+  const handleSend = async () => {
+    if (!client?.email) {
+      Alert.alert("No Email", "This client does not have an email address.");
+      return;
+    }
+
+    setSending(true);
+    try {
+      const finalSubject = replaceVariables(subject);
+      const finalBody = replaceVariables(body);
+
+      // Open email app with mailto
+      const mailto = `mailto:${client.email}?subject=${encodeURIComponent(finalSubject)}&body=${encodeURIComponent(finalBody)}`;
+      const { Linking } = await import("react-native");
+      const canOpen = await Linking.canOpenURL(mailto);
       if (canOpen) {
-        await Linking.openURL(mailtoUrl);
-        Alert.alert("Success", "Email client opened! The email has been logged.");
+        await Linking.openURL(mailto);
+        Alert.alert("Success", "Email app opened with pre-filled message.");
       } else {
-        Alert.alert("Error", "No email client found. Please copy and send manually.");
+        Alert.alert("No Email App", "Please install an email client.");
       }
     } catch (err: any) {
       Alert.alert("Error", err.message);
+    } finally {
+      setSending(false);
     }
   };
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#C9A227" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backArrow}>←</Text>
+          <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Send Email</Text>
-        <View style={{ width: 24 }} />
+        <View style={{ width: 50 }} />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.label}>To *</Text>
-        <TextInput
-          style={styles.input}
-          value={to}
-          onChangeText={setTo}
-          placeholder="client@email.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+        <Text style={styles.label}>To</Text>
+        <Text style={styles.toText}>{client?.full_name || "No client selected"}</Text>
+        <Text style={styles.toEmail}>{client?.email || "No email"}</Text>
+      </View>
 
-        <Text style={styles.label}>Subject *</Text>
-        <TextInput
-          style={styles.input}
-          value={subject}
-          onChangeText={setSubject}
-          placeholder="Email subject"
-        />
+      <View style={styles.card}>
+        <Text style={styles.label}>Subject</Text>
+        <TextInput style={styles.input} value={subject} onChangeText={setSubject} />
 
-        <Text style={styles.label}>Message *</Text>
+        <Text style={styles.label}>Message</Text>
         <TextInput
-          style={[styles.input, styles.textArea]}
+          style={[styles.input, styles.bodyInput]}
           value={body}
           onChangeText={setBody}
           multiline
-          numberOfLines={15}
+          numberOfLines={12}
           textAlignVertical="top"
         />
-
-        <View style={styles.hintBox}>
-          <Text style={styles.hintTitle}>💡 Variables</Text>
-          <Text style={styles.hintText}>
-            {{CLIENT_NAME}} — Auto-filled{"\n"}
-            {{EVENT_DATE}} — Manual or from booking{"\n"}
-            {{EVENT_LOCATION}} — Manual or from booking{"\n"}
-            {{PACKAGE_NAME}} — Manual or from booking{"\n"}
-            {{PHOTOGRAPHER_NAME}} — Your profile
-          </Text>
-        </View>
       </View>
 
-      <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
-        <Text style={styles.sendButtonText}>📧 Open Email Client</Text>
+      <TouchableOpacity style={[styles.sendButton, sending && styles.disabled]} onPress={handleSend} disabled={sending}>
+        <Text style={styles.sendButtonText}>{sending ? "Opening..." : "Open in Email App"}</Text>
       </TouchableOpacity>
 
-      <Text style={styles.note}>
-        This opens your phone's email app. The email will be pre-filled and logged in IvoryOS.
-      </Text>
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F6F0" },
-  header: { paddingHorizontal: 24, paddingTop: 60, paddingBottom: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  backArrow: { fontSize: 24, color: "#0A0A0A" },
-  title: { fontSize: 24, fontWeight: "700", color: "#0A0A0A" },
-  card: { backgroundColor: "#FFFFFF", marginHorizontal: 24, borderRadius: 16, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: "#E5E5E5" },
-  label: { fontSize: 14, fontWeight: "600", color: "#0A0A0A", marginBottom: 8, marginTop: 12 },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16 },
+  back: { fontSize: 16, color: "#C9A227", fontWeight: "600" },
+  title: { fontSize: 22, fontWeight: "700", color: "#0A0A0A" },
+  card: { backgroundColor: "#FFFFFF", marginHorizontal: 20, borderRadius: 16, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: "#E5E5E5" },
+  label: { fontSize: 14, fontWeight: "600", color: "#0A0A0A", marginBottom: 8 },
+  toText: { fontSize: 16, fontWeight: "600", color: "#0A0A0A" },
+  toEmail: { fontSize: 14, color: "#6b7280", marginTop: 2 },
   input: { backgroundColor: "#F8F6F0", paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, fontSize: 15, borderWidth: 1, borderColor: "#E5E5E5", color: "#0A0A0A" },
-  textArea: { height: 300, textAlignVertical: "top" },
-  hintBox: { backgroundColor: "#FFF8E1", padding: 16, borderRadius: 12, marginTop: 16, borderLeftWidth: 4, borderLeftColor: "#C9A227" },
-  hintTitle: { fontWeight: "700", color: "#0A0A0A", marginBottom: 6 },
-  hintText: { fontSize: 13, color: "#666", lineHeight: 20 },
-  sendButton: { backgroundColor: "#C9A227", marginHorizontal: 24, marginTop: 8, marginBottom: 12, paddingVertical: 18, borderRadius: 12, alignItems: "center" },
+  bodyInput: { height: 250, lineHeight: 22 },
+  sendButton: { backgroundColor: "#C9A227", marginHorizontal: 20, marginTop: 8, paddingVertical: 18, borderRadius: 12, alignItems: "center" },
+  disabled: { opacity: 0.6 },
   sendButtonText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700" },
-  note: { textAlign: "center", color: "#999", fontSize: 13, marginHorizontal: 24, marginBottom: 40 },
 });

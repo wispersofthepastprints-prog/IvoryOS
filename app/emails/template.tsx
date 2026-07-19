@@ -72,7 +72,7 @@ Cheers,
     category: "Business",
     body: `Hi {{client_name}},
 
-I hope you\'re doing well! This is a gentle reminder that invoice {{invoice_number}} for ${{invoice_amount}} is due on {{due_date}}.
+I hope you\'re doing well! This is a gentle reminder that invoice {{invoice_number}} for \${{invoice_amount}} is due on {{due_date}}.
 
 If you\'ve already paid, please ignore this — and thank you!
 
