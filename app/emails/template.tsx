@@ -150,7 +150,10 @@ export default function EmailTemplateScreen() {
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         const user = sessionData?.session?.user;
-        if (!user) return;
+        if (!user) {
+          setLoading(false);
+          return;
+        }
 
         const { data, error } = await supabase
           .from("photographers")
@@ -168,9 +171,19 @@ export default function EmailTemplateScreen() {
 
   // Load template data
   useEffect(() => {
-    if (!photographerId) return;
-
     const loadTemplate = async () => {
+      if (!photographerId) {
+        // No photographer yet — load defaults and stop loading
+        const defaults = DEFAULT_TEMPLATES[templateId];
+        if (defaults) {
+          setTemplateName(defaults.name);
+          setSubject(defaults.subject);
+          setBody(defaults.body);
+          setCategory(defaults.category);
+        }
+        setLoading(false);
+        return;
+      }
       try {
         // Try to fetch from DB first
         const { data, error } = await supabase
