@@ -19,7 +19,6 @@ import { signInWithGoogle } from "../../lib/google-calendar";
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { isPro } = usePurchases();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [googleConnected, setGoogleConnected] = useState(false);
