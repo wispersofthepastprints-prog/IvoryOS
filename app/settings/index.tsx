@@ -200,12 +200,6 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
           <UpgradeButton />
         </View>
-              <TouchableOpacity style={styles.upgradeButton}>
-                <Text style={styles.upgradeText}>Upgrade to Pro — $49/mo</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
 
         {/* Integrations */}
         <View style={styles.section}>
