@@ -196,6 +196,8 @@ export default function SettingsScreen() {
           >
             <Text style={styles.editProfileText}>✏️ Edit Profile</Text>
           </TouchableOpacity>
+        </View>
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
           <UpgradeButton />
