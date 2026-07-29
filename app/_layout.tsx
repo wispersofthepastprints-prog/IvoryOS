@@ -10,9 +10,12 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-  useEffect(() => {
-    checkAuth();
-    initRevenueCat();
+      useEffect(() => {
+        const init = async () => {
+          await initRevenueCat();
+        };
+        init();
+      }, []);
 
     // Listen for auth state changes — ONLY redirect on sign-out, not on token refresh
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { usePurchases } from '../hooks/usePurchases';
+import { getOfferings } from '../lib/revenuecat';
 
 export function UpgradeButton() {
   const { isPro, purchasePro, restore } = usePurchases();
@@ -13,8 +14,30 @@ export function UpgradeButton() {
 
   const handleUpgrade = async () => {
     setPurchasing(true);
+    
+    // DEBUG: Check if offerings load first
+    try {
+      const offerings = await getOfferings();
+      console.log('Offerings:', JSON.stringify(offerings, null, 2));
+      
+      if (!offerings || !offerings.current) {
+        setPurchasing(false);
+        Alert.alert(
+          'Not Ready Yet',
+          'Google Play is still syncing the product. Wait 10 minutes and try again, or check your RevenueCat dashboard.'
+        );
+        return;
+      }
+    } catch (err: any) {
+      setPurchasing(false);
+      Alert.alert('RevenueCat Error', err.message || 'Failed to load offerings');
+      return;
+    }
+
+    // Now try purchase
     const result = await purchasePro();
     setPurchasing(false);
+
     if (result.success) {
       Alert.alert('Welcome to Pro!', 'You now have unlimited clients and all Pro features.');
     } else if (result.cancelled) {
@@ -39,7 +62,7 @@ export function UpgradeButton() {
 
   return (
     <>
-      <TouchableOpacity style={styles.button} onPress={handleUpgrade} disabled={purchasing}>
+      <TouchableOpacity style={styles.button} onPress={handleUpgrade} disabled={purchasing} activeOpacity={0.8}>
         {purchasing ? (
           <ActivityIndicator color="#0A0A0A" />
         ) : (
