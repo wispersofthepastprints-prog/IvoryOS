@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { supabase, getValidUser } from "../lib/supabase";
 import { View, ActivityIndicator } from "react-native";
+import { initRevenueCat } from "../lib/revenuecat";
 
 export default function RootLayout() {
   const [loading, setLoading] = useState(true);
@@ -11,6 +12,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     checkAuth();
+    initRevenueCat();
 
     // Listen for auth state changes — ONLY redirect on sign-out, not on token refresh
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {

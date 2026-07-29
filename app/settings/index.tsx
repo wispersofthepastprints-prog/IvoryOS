@@ -10,6 +10,8 @@ import {
   Modal,
   ActivityIndicator,
 } from "react-native";
+import { usePurchases } from "../../hooks/usePurchases";
+import { UpgradeButton } from "../../components/UpgradeButton";
 import { useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -17,6 +19,7 @@ import { signInWithGoogle } from "../../lib/google-calendar";
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { isPro } = usePurchases();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [googleConnected, setGoogleConnected] = useState(false);
@@ -194,25 +197,10 @@ export default function SettingsScreen() {
           >
             <Text style={styles.editProfileText}>✏️ Edit Profile</Text>
           </TouchableOpacity>
-        </View>
-
-        {/* Subscription */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>SUBSCRIPTION</Text>
-          <View style={styles.subscriptionCard}>
-            <View style={styles.tierBadge}>
-              <Text style={styles.tierText}>
-                {isStudio ? "STUDIO" : isPro ? "PRO" : "FREE"}
-              </Text>
-            </View>
-            <Text style={styles.subText}>
-              {isStudio
-                ? "Unlimited everything"
-                : isPro
-                ? "Unlimited clients & bookings"
-                : "3 clients • 1 booking max"}
-            </Text>
-            {!isPro && !isStudio && (
+          <UpgradeButton />
+        </View>
               <TouchableOpacity style={styles.upgradeButton}>
                 <Text style={styles.upgradeText}>Upgrade to Pro — $49/mo</Text>
               </TouchableOpacity>

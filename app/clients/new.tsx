@@ -59,6 +59,22 @@ export default function NewClientScreen() {
         return;
       }
 
+      // Check free tier client limit
+      const { count: clientCount } = await supabase
+        .from("clients")
+        .select("id", { count: "exact", head: true })
+        .eq("photographer_id", photographer.id);
+
+      const { allowed, reason } = await canAddClient(clientCount || 0);
+      if (!allowed) {
+        setLoading(false);
+        Alert.alert("Free Tier Limit", reason, [
+          { text: "Cancel", style: "cancel" },
+          { text: "Upgrade to Pro", onPress: () => router.push("/settings") },
+        ]);
+        return;
+      }
+
       const { error } = await supabase.from("clients").insert({
         photographer_id: photographer.id,
         full_name: fullName,
