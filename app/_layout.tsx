@@ -10,21 +10,16 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-      useEffect(() => {
-        const init = async () => {
-          await initRevenueCat();
-        };
-        init();
-      }, []);
+  useEffect(() => {
+    checkAuth();
+    initRevenueCat();
 
-    // Listen for auth state changes — ONLY redirect on sign-out, not on token refresh
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") {
         setIsAuthenticated(false);
         router.replace("/login");
       } else if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         setIsAuthenticated(!!session);
-        // Only redirect to home if currently on login screen
         const isAuthScreen = segments[0] === "login";
         if (isAuthScreen) {
           router.replace("/");
@@ -39,14 +34,11 @@ export default function RootLayout() {
     const user = await getValidUser();
     setIsAuthenticated(!!user);
     setLoading(false);
-    if (!user) {
-      router.replace("/login");
-    }
   };
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F8F6F0" }}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#C9A227" />
       </View>
     );
@@ -54,15 +46,6 @@ export default function RootLayout() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="clients/index" />
-      <Stack.Screen name="clients/new" />
-      <Stack.Screen name="clients/[id]" />
-      <Stack.Screen name="bookings/index" />
-      <Stack.Screen name="bookings/new" />
-      <Stack.Screen name="bookings/[id]" />
-      <Stack.Screen name="settings/index" />
       <Stack.Screen name="invoices/index" />
       <Stack.Screen name="invoices/new" />
       <Stack.Screen name="invoices/[id]" />
