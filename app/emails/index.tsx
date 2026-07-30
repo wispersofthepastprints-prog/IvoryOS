@@ -35,10 +35,17 @@ export default function EmailsScreen() {
   useEffect(() => {
     const fetchTemplates = async () => {
       try {
-        const { data, error } = await supabase
+        // Timeout after 3 seconds
+        const timeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Timeout")), 3000)
+        );
+        
+        const query = supabase
           .from("emails")
           .select("id, name, subject, category")
           .order("category", { ascending: true });
+
+        const { data, error } = await Promise.race([query, timeout]);
 
         if (error || !data || data.length === 0) {
           console.log("[Emails] Using defaults. Reason:", error?.message || "empty");
@@ -46,8 +53,8 @@ export default function EmailsScreen() {
         } else {
           setTemplates(data);
         }
-      } catch (err) {
-        console.error("[Emails] Exception:", err);
+      } catch (err: any) {
+        console.error("[Emails] Exception:", err.message || err);
         setTemplates(DEFAULT_TEMPLATES);
       } finally {
         setLoading(false);
