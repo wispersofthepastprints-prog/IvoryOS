@@ -1,7 +1,7 @@
 // lib/revenuecat.ts
 import Purchases from 'react-native-purchases';
 
-const REVENUECAT_API_KEY = 'test_mzGYMiNeJLOpPIXhvBiWLfsuWxT'; // Test key
+const REVENUECAT_API_KEY = 'goog_izMOkTLKZKEEuEYlaelXGbiEtBQ'; // Test key
 // const REVENUECAT_API_KEY = 'goog_xxxxxxxxxxxx'; // Production key (swap when live)
 
 export const OFFERING_ID = 'default';

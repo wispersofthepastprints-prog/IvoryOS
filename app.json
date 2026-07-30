@@ -3,7 +3,7 @@
     "name": "Ivory OS",
     "slug": "ivory-os",
     "scheme": "ivoryos",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -20,7 +20,7 @@
       "bundleIdentifier": "com.wispersofthepast.ivoryos"
     },
     "android": {
-      "versionCode": 35,
+      "versionCode": 36,
       "enableProguardInReleaseBuilds": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
