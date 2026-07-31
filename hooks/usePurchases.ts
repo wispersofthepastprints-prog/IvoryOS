@@ -10,10 +10,11 @@ export function usePurchases() {
 
   const checkStatus = useCallback(async () => {
     try {
-      const { customerInfo } = await Purchases.getCustomerInfo();
-      const hasPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      // getCustomerInfo returns CustomerInfo DIRECTLY (no destructuring!)
+      const info = await Purchases.getCustomerInfo();
+      const hasPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
       setIsPro(hasPro);
-      setCustomerInfo(customerInfo);
+      setCustomerInfo(info);
       return hasPro;
     } catch (error) {
       console.error('Status check failed:', error);
@@ -40,6 +41,7 @@ export function usePurchases() {
       if (!current) throw new Error('No offerings');
       const monthly = current.availablePackages.find(p => p.identifier === 'monthly');
       if (!monthly) throw new Error('No monthly package');
+      // purchasePackage DOES return { customerInfo } — this one was correct
       const { customerInfo } = await Purchases.purchasePackage(monthly);
       const hasPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
       setIsPro(hasPro);
@@ -53,10 +55,11 @@ export function usePurchases() {
 
   const restore = useCallback(async () => {
     try {
-      const { customerInfo } = await Purchases.restorePurchases();
-      const hasPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      // restorePurchases returns CustomerInfo DIRECTLY (no destructuring!)
+      const info = await Purchases.restorePurchases();
+      const hasPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
       setIsPro(hasPro);
-      setCustomerInfo(customerInfo);
+      setCustomerInfo(info);
       return { success: true, isPro: hasPro };
     } catch (error: any) {
       return { success: false, error: error.message };

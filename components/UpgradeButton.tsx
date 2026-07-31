@@ -1,12 +1,31 @@
 // components/UpgradeButton.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { TouchableOpacity, Text, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { usePurchases } from '../hooks/usePurchases';
 import { getOfferings } from '../lib/revenuecat';
 
 export function UpgradeButton() {
-  const { isPro, purchasePro, restore } = usePurchases();
+  const { isPro, purchasePro, restore, refresh } = usePurchases();
   const [purchasing, setPurchasing] = useState(false);
+  const [priceString, setPriceString] = useState<string | null>(null);
+
+  // Load the real store price + refresh Pro status when the screen mounts
+  useEffect(() => {
+    refresh();
+    (async () => {
+      try {
+        const offerings = await getOfferings();
+        const monthly = offerings?.current?.availablePackages.find(
+          (p: any) => p.identifier === 'monthly'
+        );
+        if (monthly?.product?.priceString) {
+          setPriceString(monthly.product.priceString);
+        }
+      } catch {
+        // keep fallback price
+      }
+    })();
+  }, [refresh]);
 
   if (isPro) {
     return <Text style={styles.proBadge}>✓ Pro Member</Text>;
@@ -14,12 +33,10 @@ export function UpgradeButton() {
 
   const handleUpgrade = async () => {
     setPurchasing(true);
-    
-    // DEBUG: Check if offerings load first
+
+    // Check offerings load first
     try {
       const offerings = await getOfferings();
-      console.log('Offerings:', JSON.stringify(offerings, null, 2));
-      
       if (!offerings || !offerings.current) {
         setPurchasing(false);
         Alert.alert(
@@ -34,14 +51,21 @@ export function UpgradeButton() {
       return;
     }
 
-    // Now try purchase
+    // Try purchase
     const result = await purchasePro();
     setPurchasing(false);
 
     if (result.success) {
       Alert.alert('Welcome to Pro!', 'You now have unlimited clients and all Pro features.');
     } else if (result.cancelled) {
-      // no alert
+      // user backed out — no alert
+    } else if (result.error && /already (purchased|own)/i.test(result.error)) {
+      // Google says they already own it but the app didn't know — auto-restore
+      Alert.alert(
+        'Already Purchased',
+        'Looks like you already own Pro. Restoring it now…',
+        [{ text: 'OK', onPress: handleRestore }]
+      );
     } else {
       Alert.alert('Purchase Failed', result.error || 'Something went wrong. Try again.');
     }
@@ -66,7 +90,9 @@ export function UpgradeButton() {
         {purchasing ? (
           <ActivityIndicator color="#0A0A0A" />
         ) : (
-          <Text style={styles.buttonText}>Upgrade to Pro — $49/month</Text>
+          <Text style={styles.buttonText}>
+            Upgrade to Pro — {priceString ?? '$49'}/month
+          </Text>
         )}
       </TouchableOpacity>
       <TouchableOpacity onPress={handleRestore} style={styles.restoreLink}>
