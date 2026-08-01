@@ -12,10 +12,11 @@ import {
 } from "react-native";
 import { usePurchases } from "../../hooks/usePurchases";
 import { UpgradeButton } from "../../components/UpgradeButton";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { signInWithGoogle } from "../../lib/google-calendar";
+import * as Linking from "expo-linking";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -31,10 +32,12 @@ export default function SettingsScreen() {
   const [editLocation, setEditLocation] = useState("");
   const [editPhone, setEditPhone] = useState("");
 
-  useEffect(() => {
-    fetchProfile();
-    checkGoogleConnection();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+      checkGoogleConnection();
+    }, [])
+  );
 
   const fetchProfile = async () => {
     try {
@@ -145,6 +148,22 @@ export default function SettingsScreen() {
     Alert.alert("Disconnected", "Google Calendar disconnected.");
   };
 
+  const [connectingBank, setConnectingBank] = useState(false);
+
+  const handleConnectBank = async () => {
+    setConnectingBank(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-connect-link");
+      if (error) throw error;
+      if (!data?.url) throw new Error("No onboarding link returned");
+      await Linking.openURL(data.url);
+    } catch (err: any) {
+      Alert.alert("Could not connect bank", err.message);
+    } finally {
+      setConnectingBank(false);
+    }
+  };
+
   const handleLogout = async () => {
     Alert.alert("Log Out", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
@@ -228,8 +247,16 @@ export default function SettingsScreen() {
               <Text style={styles.connectedText}>✅ Bank account connected</Text>
             </View>
           ) : (
-            <TouchableOpacity style={styles.connectButton}>
-              <Text style={styles.connectText}>Connect Bank Account</Text>
+            <TouchableOpacity
+              style={styles.connectButton}
+              onPress={handleConnectBank}
+              disabled={connectingBank}
+            >
+              {connectingBank ? (
+                <ActivityIndicator color="#1A73E8" />
+              ) : (
+                <Text style={styles.connectText}>Connect Bank Account</Text>
+              )}
             </TouchableOpacity>
           )}
         </View>
