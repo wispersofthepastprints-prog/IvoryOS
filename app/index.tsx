@@ -144,9 +144,6 @@ export default function DashboardScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.greeting}>Hi, {profile?.full_name?.split(" ")[0] || "there"} 👋</Text>
-          <TouchableOpacity onPress={() => router.push("/settings")}>
-            <Text style={styles.settings}>⚙️</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.revenueCard}>
