@@ -1,6 +1,7 @@
 // supabase/functions/create-connect-link/index.ts
 // Creates (or reuses) a Stripe Express account for the photographer
 // and returns an onboarding link they complete in the browser.
+// v2: adds server-side logging so failures appear in the Logs tab.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -32,6 +33,7 @@ async function stripePost(path: string, params: Record<string, string>) {
   });
   const data = await res.json();
   if (!res.ok) {
+    console.error(`Stripe ${path} failed (${res.status}):`, JSON.stringify(data?.error || data));
     throw new Error(data?.error?.message || `Stripe error on ${path}`);
   }
   return data;
@@ -55,7 +57,11 @@ serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
     const { data: { user }, error: userErr } = await userClient.auth.getUser();
-    if (userErr || !user) return json({ error: "Unauthorized" }, 401);
+    if (userErr || !user) {
+      console.error("auth.getUser failed:", JSON.stringify(userErr));
+      return json({ error: "Unauthorized" }, 401);
+    }
+    console.log(`create-connect-link called by user ${user.id} (${user.email})`);
 
     // Admin client for reads/writes on photographers
     const admin = createClient(supabaseUrl, serviceKey);
@@ -66,8 +72,10 @@ serve(async (req) => {
       .single();
 
     if (photogErr || !photog) {
+      console.error(`photographer lookup failed for auth_id ${user.id}:`, JSON.stringify(photogErr));
       return json({ error: "Photographer profile not found. Set up your profile first." }, 404);
     }
+    console.log(`found photographer row ${photog.id}, stripe_connect_account_id=${photog.stripe_connect_account_id}`);
 
     // Reuse existing Connect account, or create one
     let accountId: string = photog.stripe_connect_account_id;
@@ -82,12 +90,16 @@ serve(async (req) => {
         "metadata[auth_id]": user.id,
       });
       accountId = account.id;
+      console.log(`created Stripe account ${accountId}`);
 
       const { error: updateErr } = await admin
         .from("photographers")
         .update({ stripe_connect_account_id: accountId })
         .eq("auth_id", user.id);
-      if (updateErr) throw new Error(`Failed to save account id: ${updateErr.message}`);
+      if (updateErr) {
+        console.error("failed to save account id:", JSON.stringify(updateErr));
+        throw new Error(`Failed to save account id: ${updateErr.message}`);
+      }
     }
 
     // Generate the onboarding link
@@ -97,9 +109,11 @@ serve(async (req) => {
       return_url: RETURN_URL,
       type: "account_onboarding",
     });
+    console.log(`onboarding link created for ${accountId}`);
 
     return json({ url: link.url, account: accountId });
   } catch (e: any) {
+    console.error("create-connect-link error:", e?.message || String(e));
     return json({ error: e?.message || "Unknown error" }, 500);
   }
 });

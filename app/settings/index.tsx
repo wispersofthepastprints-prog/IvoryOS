@@ -25,6 +25,7 @@ export default function SettingsScreen() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [payoutStatus, setPayoutStatus] = useState<"none" | "pending" | "connected">("none");
 
   // Edit form state
   const [editFullName, setEditFullName] = useState("");
@@ -36,6 +37,7 @@ export default function SettingsScreen() {
     useCallback(() => {
       fetchProfile();
       checkGoogleConnection();
+      checkPayoutStatus();
     }, [])
   );
 
@@ -74,6 +76,13 @@ export default function SettingsScreen() {
   const checkGoogleConnection = async () => {
     const token = await AsyncStorage.getItem("google_access_token");
     setGoogleConnected(!!token);
+  };
+
+  const checkPayoutStatus = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("connect-status");
+      if (data?.status) setPayoutStatus(data.status);
+    } catch {}
   };
 
   const handleSaveProfile = async () => {
@@ -154,9 +163,18 @@ export default function SettingsScreen() {
     setConnectingBank(true);
     try {
       const { data, error } = await supabase.functions.invoke("create-connect-link");
-      if (error) throw error;
-      if (!data?.url) throw new Error("No onboarding link returned");
-      await Linking.openURL(data.url);
+      if (error) {
+        let msg = error.message;
+        try {
+          const body = await (error as any).context?.json();
+          if (body?.error) msg = body.error;
+        } catch {}
+        Alert.alert("Could not connect bank", msg);
+        return;
+      }
+      if (data?.url) {
+        await Linking.openURL(data.url);
+      }
     } catch (err: any) {
       Alert.alert("Could not connect bank", err.message);
     } finally {
@@ -242,10 +260,22 @@ export default function SettingsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>PAYOUTS</Text>
           <Text style={styles.subText}>Connect your bank to receive payments</Text>
-          {profile?.stripe_connect_account_id ? (
+          {payoutStatus === "connected" ? (
             <View style={styles.connectedBadge}>
               <Text style={styles.connectedText}>✅ Bank account connected</Text>
             </View>
+          ) : payoutStatus === "pending" ? (
+            <TouchableOpacity
+              style={styles.pendingButton}
+              onPress={handleConnectBank}
+              disabled={connectingBank}
+            >
+              {connectingBank ? (
+                <ActivityIndicator color="#92400E" />
+              ) : (
+                <Text style={styles.pendingText}>⚠️ Finish bank setup</Text>
+              )}
+            </TouchableOpacity>
           ) : (
             <TouchableOpacity
               style={styles.connectButton}
@@ -443,6 +473,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   connectText: { color: "#1A73E8", fontWeight: "700", fontSize: 15 },
+  pendingButton: {
+    backgroundColor: "#FEF3C7",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 8,
+  },
+  pendingText: { color: "#92400E", fontWeight: "700", fontSize: 15 },
   connectedBadge: {
     backgroundColor: "#E6F4EA",
     paddingVertical: 14,
