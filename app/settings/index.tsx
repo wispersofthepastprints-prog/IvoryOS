@@ -36,7 +36,6 @@ export default function SettingsScreen() {
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
-      checkGoogleConnection();
       checkPayoutStatus();
     }, [])
   );
@@ -59,6 +58,15 @@ export default function SettingsScreen() {
 
       setProfile(data);
 
+      // Google Calendar state comes from the database now
+      setGoogleConnected(!!data?.google_refresh_token);
+      if (data?.google_access_token) {
+        // Keep the short-lived token locally so calendar event creation works
+        await AsyncStorage.setItem("google_access_token", data.google_access_token);
+      } else {
+        await AsyncStorage.removeItem("google_access_token");
+      }
+
       // Pre-fill edit form
       if (data) {
         setEditFullName(data.full_name || "");
@@ -71,11 +79,6 @@ export default function SettingsScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const checkGoogleConnection = async () => {
-    const token = await AsyncStorage.getItem("google_access_token");
-    setGoogleConnected(!!token);
   };
 
   const checkPayoutStatus = async () => {
@@ -140,21 +143,32 @@ export default function SettingsScreen() {
 
   const handleConnectGoogle = async () => {
     try {
-      const token = await signInWithGoogle();
-      if (token) {
-        await AsyncStorage.setItem("google_access_token", token);
-        setGoogleConnected(true);
-        Alert.alert("Success", "Google Calendar connected!");
-      }
+      await signInWithGoogle(); // opens the browser; result comes back via deep link
     } catch (err: any) {
       Alert.alert("Error", err.message);
     }
   };
 
   const handleDisconnectGoogle = async () => {
-    await AsyncStorage.removeItem("google_access_token");
-    setGoogleConnected(false);
-    Alert.alert("Disconnected", "Google Calendar disconnected.");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (user) {
+        await supabase
+          .from("photographers")
+          .update({
+            google_refresh_token: null,
+            google_access_token: null,
+            google_token_expiry: null,
+          })
+          .eq("auth_id", user.id);
+      }
+      await AsyncStorage.removeItem("google_access_token");
+      setGoogleConnected(false);
+      Alert.alert("Disconnected", "Google Calendar disconnected.");
+    } catch (err: any) {
+      Alert.alert("Error", err.message);
+    }
   };
 
   const [connectingBank, setConnectingBank] = useState(false);

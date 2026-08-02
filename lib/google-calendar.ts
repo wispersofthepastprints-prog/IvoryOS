@@ -1,12 +1,13 @@
-import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 
 // Web client ID for browser OAuth
-const GOOGLE_CLIENT_ID = '195901890313-3cacmm6jb1vrsq8ocdh2pihdug8rq2cv.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '269799853021-i58g5ucjnu9mf70lj72263hfc0s6ktpf.apps.googleusercontent.com';
 
-// IMPORTANT: Replace with your actual GitHub Pages URL after enabling Pages
-// Format: https://YOUR_USERNAME.github.io/REPO_NAME/google-auth.html
-const REDIRECT_URI = 'https://wispersofthepastprints-prog.github.io/IvoryOS/google-auth.html';
+// Authorization-code flow: Google redirects here (edge function), which
+// exchanges the code for tokens and 302s back into the app.
+const REDIRECT_URI = 'https://ewqbywvhgujwkqnxvuqi.supabase.co/functions/v1/google-auth-callback';
 
 const SCOPES = [
   'openid',
@@ -17,44 +18,33 @@ const SCOPES = [
 
 const TOKEN_KEY = 'google_access_token';
 
-export async function signInWithGoogle(): Promise<string | null> {
-  try {
-    // Build Google OAuth URL
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
-      `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-      `&response_type=token` +
-      `&scope=${encodeURIComponent(SCOPES)}` +
-      `&prompt=consent` +
-      `&include_granted_scopes=true`;
+// Opens Google's consent screen in the browser. No promise to resolve —
+// the edge function stores the tokens and bounces the user back into the
+// app, where the settings screen re-checks connection state on focus.
+export async function signInWithGoogle(): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
+  if (!user) throw new Error('Not logged in');
 
-    // Open browser for OAuth
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, REDIRECT_URI);
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+    `client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
+    `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+    `&response_type=code` +
+    `&scope=${encodeURIComponent(SCOPES)}` +
+    `&access_type=offline` +
+    `&prompt=consent` +
+    `&include_granted_scopes=true` +
+    `&state=${encodeURIComponent(user.id)}`;
 
-    if (result.type === 'success') {
-      // Parse token from redirect URL
-      const url = new URL(result.url);
-      const token = url.searchParams.get('token');
-
-      if (token) {
-        await AsyncStorage.setItem(TOKEN_KEY, token);
-        return token;
-      }
-    }
-
-    return null;
-  } catch (err: any) {
-    console.error('Google auth error:', err);
-    throw new Error('Failed to connect to Google Calendar: ' + err.message);
-  }
+  await Linking.openURL(authUrl);
 }
 
 export async function getStoredToken(): Promise<string | null> {
-  return await AsyncStorage.getItem('google_access_token');
+  return await AsyncStorage.getItem(TOKEN_KEY);
 }
 
 export async function clearStoredToken(): Promise<void> {
-  await AsyncStorage.removeItem('google_access_token');
+  await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
 export async function createCalendarEvent(accessToken: string, event: {
