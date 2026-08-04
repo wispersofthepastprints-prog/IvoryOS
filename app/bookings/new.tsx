@@ -5,6 +5,15 @@ import { supabase } from "../../lib/supabase";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Parse a user-typed dollar amount ("3,200" / "3200" / "$3,200.00") into cents.
+const parseDollarsToCents = (raw: string): number | null => {
+  const cleaned = raw.replace(/[^0-9.]/g, "");
+  if (!cleaned) return null;
+  const value = parseFloat(cleaned);
+  if (isNaN(value) || value < 0) return null;
+  return Math.round(value * 100);
+};
+
 export default function NewBookingScreen() {
   const router = useRouter();
   const [clientId, setClientId] = useState("");
@@ -13,6 +22,8 @@ export default function NewBookingScreen() {
   const [showClientDropdown, setShowClientDropdown] = useState(false);
   const [location, setLocation] = useState("");
   const [packagePrice, setPackagePrice] = useState("");
+  const [depositAmount, setDepositAmount] = useState("");
+  const [balanceDue, setBalanceDue] = useState("");
   const [packageDescription, setPackageDescription] = useState("");
   const { date } = useLocalSearchParams();
   const [eventDate, setEventDate] = useState(date ? new Date(date as string) : new Date());
@@ -78,6 +89,39 @@ export default function NewBookingScreen() {
       return;
     }
 
+    const priceCents = parseDollarsToCents(packagePrice);
+    if (!priceCents || priceCents <= 0) {
+      Alert.alert("Invalid Price", "Enter the package price in dollars, numbers only — e.g. 3200");
+      return;
+    }
+
+    // Deposit/balance: use what was typed, otherwise default to 25% deposit + remainder.
+    let depositCents = depositAmount ? parseDollarsToCents(depositAmount) : null;
+    let balanceCents = balanceDue ? parseDollarsToCents(balanceDue) : null;
+
+    if (depositAmount && depositCents === null) {
+      Alert.alert("Invalid Deposit", "Enter the deposit in dollars, numbers only — e.g. 800");
+      return;
+    }
+    if (balanceDue && balanceCents === null) {
+      Alert.alert("Invalid Balance", "Enter the balance in dollars, numbers only — e.g. 2400");
+      return;
+    }
+
+    if (depositCents === null && balanceCents === null) {
+      depositCents = Math.round(priceCents * 0.25);
+      balanceCents = priceCents - depositCents;
+    } else if (depositCents === null) {
+      depositCents = priceCents - (balanceCents as number);
+    } else if (balanceCents === null) {
+      balanceCents = priceCents - depositCents;
+    }
+
+    if (depositCents < 0 || balanceCents < 0) {
+      Alert.alert("Check Amounts", "Deposit and balance can't be more than the package price.");
+      return;
+    }
+
     setLoading(true);
     try {
       let session = null;
@@ -115,7 +159,9 @@ export default function NewBookingScreen() {
         photographer_id: photographer.id,
         client_id: clientId,
         location,
-        package_price: parseFloat(packagePrice),
+        package_price: priceCents,
+        deposit_amount: depositCents,
+        balance_due: balanceCents,
         package_description: packageDescription,
         event_date: eventDate.toISOString().split("T")[0],
         status,
@@ -195,8 +241,14 @@ export default function NewBookingScreen() {
           />
         )}
 
-        <Text style={styles.label}>Package Price *</Text>
-        <TextInput style={styles.input} value={packagePrice} onChangeText={setPackagePrice} placeholder="4500" keyboardType="decimal-pad" />
+        <Text style={styles.label}>Package Price * (in dollars)</Text>
+        <TextInput style={styles.input} value={packagePrice} onChangeText={setPackagePrice} placeholder="e.g. 3200" keyboardType="decimal-pad" />
+
+        <Text style={styles.label}>Deposit (optional — defaults to 25%)</Text>
+        <TextInput style={styles.input} value={depositAmount} onChangeText={setDepositAmount} placeholder="e.g. 800" keyboardType="decimal-pad" />
+
+        <Text style={styles.label}>Balance Due (optional — defaults to remainder)</Text>
+        <TextInput style={styles.input} value={balanceDue} onChangeText={setBalanceDue} placeholder="e.g. 2400" keyboardType="decimal-pad" />
 
         <Text style={styles.label}>Package Description</Text>
         <TextInput
