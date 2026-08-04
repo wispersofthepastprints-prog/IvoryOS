@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView,
 import { useRouter } from "expo-router";
 import { supabase, getValidUser } from "../../lib/supabase";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { canAddClient } from "../../lib/subscription";
 
 export default function NewClientScreen() {
   const router = useRouter();

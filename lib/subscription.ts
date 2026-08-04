@@ -1,7 +1,7 @@
 // lib/subscription.ts
 import { checkProStatus } from './revenuecat';
 
-const FREE_CLIENT_LIMIT = 5;
+const FREE_CLIENT_LIMIT = 3;
 
 export async function canAddClient(currentClientCount: number): Promise<{
   allowed: boolean;
