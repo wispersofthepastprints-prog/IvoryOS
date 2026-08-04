@@ -75,6 +75,20 @@ export default function BookingsScreen() {
     loadWithRetry();
   };
 
+  const formatPrice = (cents: number | null | undefined) => {
+    if (!cents || cents <= 0) return "$0";
+    return `$${(cents / 100).toLocaleString()}`;
+  };
+
+  const bookingTitle = (booking: any) => {
+    if (booking.title) return booking.title;
+    const c = booking.clients;
+    if (c?.full_name) {
+      return c.partner_name ? `${c.full_name} & ${c.partner_name}` : c.full_name;
+    }
+    return "Untitled Booking";
+  };
+
   if (loading && !refreshing) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -115,12 +129,12 @@ export default function BookingsScreen() {
             style={styles.card}
             onPress={() => router.push(`/bookings/${booking.id}`)}
           >
-            <Text style={styles.titleText}>{booking.title || "Untitled Booking"}</Text>
+            <Text style={styles.titleText}>{bookingTitle(booking)}</Text>
             <Text style={styles.detail}>
               📅 {booking.event_date ? new Date(booking.event_date).toLocaleDateString("en-AU") : "No date"}
             </Text>
-            <Text style={styles.detail}>📍 {booking.event_location || "No location"}</Text>
-            <Text style={styles.price}>${booking.package_price || 0}</Text>
+            <Text style={styles.detail}>📍 {booking.event_location || booking.location || "No location"}</Text>
+            <Text style={styles.price}>{formatPrice(booking.package_price)}</Text>
           </TouchableOpacity>
         ))
       )}

@@ -188,13 +188,16 @@ export default function BookingDetailScreen() {
     );
   }
 
+  const headerTitle = booking.title
+    || (client?.full_name ? (client.partner_name ? `${client.full_name} & ${client.partner_name}` : client.full_name) : "Booking");
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>{booking.title || "Booking"}</Text>
+        <Text style={styles.title}>{headerTitle}</Text>
         <View style={{ width: 50 }} />
       </View>
 
@@ -208,7 +211,7 @@ export default function BookingDetailScreen() {
       <View style={styles.card}>
         <Text style={styles.sectionLabel}>EVENT</Text>
         <Text style={styles.detail}>📅 {formatDate(booking.event_date)}</Text>
-        <Text style={styles.detail}>📍 {booking.event_location || "Location TBA"}</Text>
+        <Text style={styles.detail}>📍 {booking.event_location || booking.location || "Location TBA"}</Text>
       </View>
 
       <View style={styles.card}>
