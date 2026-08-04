@@ -37,6 +37,36 @@ export default function BookingDetailScreen() {
     }
   };
 
+  const deleteBooking = () => {
+    Alert.alert(
+      "Delete Booking?",
+      "This permanently deletes the booking. It will not delete the client. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from("bookings")
+                .delete()
+                .eq("id", id);
+
+              if (error) {
+                Alert.alert("Error", error.message);
+              } else {
+                router.back();
+              }
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Could not delete booking.");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const createPayment = async (type: "deposit" | "balance") => {
     try {
       // Validate booking has required financial fields
@@ -233,6 +263,10 @@ export default function BookingDetailScreen() {
         )}
       </View>
 
+      <TouchableOpacity style={styles.deleteButton} onPress={deleteBooking}>
+        <Text style={styles.deleteText}>🗑 Delete Booking</Text>
+      </TouchableOpacity>
+
       <View style={{ height: 40 }} />
     </ScrollView>
   );
@@ -258,4 +292,6 @@ const styles = StyleSheet.create({
   payButton: { backgroundColor: "#C9A227", paddingVertical: 16, borderRadius: 12, alignItems: "center", marginTop: 8 },
   payText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700" },
   paidText: { fontSize: 16, color: "#059669", fontWeight: "700", textAlign: "center", marginTop: 8 },
+  deleteButton: { marginHorizontal: 24, marginTop: 4, paddingVertical: 16, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: "#FCA5A5" },
+  deleteText: { color: "#DC2626", fontSize: 16, fontWeight: "700" },
 });
