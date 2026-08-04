@@ -34,10 +34,6 @@ export default function DashboardScreen() {
         setLoading(false);
         return;
       }
-      if (!user.email_confirmed_at) {
-        setLoading(false);
-        return;
-      }
       const { data: profileData, error: profileError } = await supabase
         .from("photographers")
         .select("id, full_name, email, business_name, location, phone, created_at, subscription_tier, stripe_connect_account_id")
@@ -62,7 +58,7 @@ export default function DashboardScreen() {
         .gte("created_at", startOfMonth.toISOString())
         .order("event_date", { ascending: true });
 
-      const monthlyRevenue = bookings?.reduce((sum, b) => sum + (b.package_price || 0), 0) || 0;
+      const monthlyRevenueCents = bookings?.reduce((sum, b) => sum + (b.package_price || 0), 0) || 0;
 
       const today = new Date().toISOString();
       const { data: upcoming } = await supabase
@@ -106,7 +102,7 @@ export default function DashboardScreen() {
       });
 
       setData({
-        monthlyRevenue,
+        monthlyRevenueCents,
         bookingCount: bookings?.length || 0,
         upcomingBooking: upcoming?.[0] || null,
         upcomingClient: upcoming?.[0]?.clients || null,
@@ -122,11 +118,17 @@ export default function DashboardScreen() {
 
   const onRefresh = () => { setRefreshing(true); fetchDashboardData(); };
 
-  const formatCurrency = (amount: number) => `$${amount.toLocaleString()}`;
+  // package_price is stored in cents
+  const formatCurrency = (cents: number) => `$${(cents / 100).toLocaleString()}`;
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return "";
     return new Date(dateStr).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
   };
+
+  const upcomingTitle = data?.upcomingBooking?.title
+    || (data?.upcomingClient?.full_name
+      ? (data.upcomingClient.partner_name ? `${data.upcomingClient.full_name} & ${data.upcomingClient.partner_name}` : data.upcomingClient.full_name)
+      : null);
 
   if (loading) {
     return (
@@ -148,7 +150,7 @@ export default function DashboardScreen() {
 
         <View style={styles.revenueCard}>
           <Text style={styles.revenueLabel}>THIS MONTH</Text>
-          <Text style={styles.revenueAmount}>{formatCurrency(data?.monthlyRevenue || 0)}</Text>
+          <Text style={styles.revenueAmount}>{formatCurrency(data?.monthlyRevenueCents || 0)}</Text>
           <Text style={styles.revenueSubtext}>{data?.bookingCount || 0} bookings</Text>
         </View>
 
@@ -158,9 +160,9 @@ export default function DashboardScreen() {
             onPress={() => router.push(`/bookings/${data.upcomingBooking.id}`)}
           >
             <Text style={styles.sectionLabel}>UPCOMING</Text>
-            <Text style={styles.upcomingTitle}>{data.upcomingBooking.title}</Text>
+            {upcomingTitle && <Text style={styles.upcomingTitle}>{upcomingTitle}</Text>}
             <Text style={styles.upcomingDetail}>📅 {formatDate(data.upcomingBooking.event_date)}</Text>
-            <Text style={styles.upcomingDetail}>📍 {data.upcomingBooking.event_location || "Location TBA"}</Text>
+            <Text style={styles.upcomingDetail}>📍 {data.upcomingBooking.event_location || data.upcomingBooking.location || "Location TBA"}</Text>
             <Text style={styles.shotListText}>View Booking →</Text>
           </TouchableOpacity>
         )}
