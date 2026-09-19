@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Switch } from "react-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,11 +16,11 @@ export default function AddExpenseScreen() {
   const [gstRegistered, setGstRegistered] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
     getLedgerSettings().then((s: any) => {
       if (s) setGstRegistered(!!s.gst_registered);
     });
-  });
+  }, []);
 
   const save = async () => {
     const dollars = parseFloat(amount);

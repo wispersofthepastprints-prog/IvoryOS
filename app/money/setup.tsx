@@ -86,7 +86,6 @@ const styles = StyleSheet.create({
   optionText: { fontSize: 16, color: "#0A0A0A", fontWeight: "500" },
   optionTextActive: { fontWeight: "700" },
   row: { flexDirection: "row", gap: 12, paddingHorizontal: 24 },
-  row > * : {}, // placeholder no-op
   pctRow: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 24 },
   pctInput: { backgroundColor: "#FFFFFF", borderRadius: 12, borderWidth: 1, borderColor: "#E5E5E5", padding: 16, fontSize: 20, fontWeight: "700", width: 110, textAlign: "center" },
   hint: { marginHorizontal: 24, marginTop: 12, fontSize: 13, color: "#666", lineHeight: 18 },
