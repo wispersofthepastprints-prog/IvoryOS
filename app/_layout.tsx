@@ -60,6 +60,10 @@ export default function RootLayout() {
       <Stack.Screen name="wedding-day/index" />
       <Stack.Screen name="calendar/index" />
       <Stack.Screen name="more" />
+      <Stack.Screen name="money/index" />
+      <Stack.Screen name="money/setup" />
+      <Stack.Screen name="money/add-expense" />
+      <Stack.Screen name="money/vault" />
     </Stack>
   );
 }

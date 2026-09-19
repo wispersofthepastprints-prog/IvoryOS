@@ -20,7 +20,7 @@
       "bundleIdentifier": "com.wispersofthepast.ivoryos"
     },
     "android": {
-      "versionCode": 39,
+      "versionCode": 50,
       "enableProguardInReleaseBuilds": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

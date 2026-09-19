@@ -12,6 +12,7 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<any>(null);
+  const [taxSetAside, setTaxSetAside] = useState<number | null>(null);
 
   useEffect(() => { fetchDashboardData(); }, []);
 
@@ -50,6 +51,27 @@ export default function DashboardScreen() {
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
+
+      // Ivory Ledger: monthly tax set-aside (derived, never stored)
+      setTaxSetAside(null);
+      try {
+        const { data: ledger } = await supabase
+          .from("ledger_settings")
+          .select("set_aside_pct")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (ledger) {
+          const { data: income } = await supabase
+            .from("ledger_income")
+            .select("amount")
+            .eq("user_id", user.id)
+            .gte("paid_at", startOfMonth.toISOString());
+          const totalDollars = (income || []).reduce((s: number, r: any) => s + Number(r.amount), 0);
+          setTaxSetAside(Math.round(totalDollars * 100 * (ledger.set_aside_pct / 100)));
+        }
+      } catch (ledgerErr) {
+        console.error("Ledger fetch error:", ledgerErr);
+      }
 
       const { data: bookings } = await supabase
         .from("bookings")
@@ -152,6 +174,11 @@ export default function DashboardScreen() {
           <Text style={styles.revenueLabel}>THIS MONTH</Text>
           <Text style={styles.revenueAmount}>{formatCurrency(data?.monthlyRevenueCents || 0)}</Text>
           <Text style={styles.revenueSubtext}>{data?.bookingCount || 0} bookings</Text>
+          {taxSetAside !== null && (
+            <Text style={styles.revenueSubtext}>
+              Tax set aside: <Text style={{ color: "#C9A227", fontWeight: "700" }}>{formatCurrency(taxSetAside)}</Text>
+            </Text>
+          )}
         </View>
 
         {data?.upcomingBooking && (
@@ -177,6 +204,7 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.actionsRow}>
             <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/invoices")} />
+            <QuickActionButton icon="🧾" label="Add Expense" onPress={() => router.push("/money/add-expense")} />
             <QuickActionButton icon="📦" label="New Package" onPress={() => router.push("/packages")} />
           </View>
         </View>
@@ -211,6 +239,10 @@ export default function DashboardScreen() {
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/bookings")}>
           <Text style={styles.navIcon}>📅</Text>
           <Text style={styles.navLabel}>Bookings</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.navItem} onPress={() => router.push("/money")}>
+          <Text style={styles.navIcon}>💰</Text>
+          <Text style={styles.navLabel}>Money</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/more")}>
           <Text style={styles.navIcon}>⋮</Text>

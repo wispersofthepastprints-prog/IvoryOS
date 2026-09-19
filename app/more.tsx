@@ -5,6 +5,7 @@ export default function MoreScreen() {
   const router = useRouter();
 
   const menuItems = [
+    { icon: "🏦", label: "Money & Tax", route: "/money" },
     { icon: "📝", label: "Contracts", route: "/contracts" },
     { icon: "📧", label: "Email Templates", route: "/emails" },
     { icon: "📦", label: "Packages", route: "/packages" },
