@@ -24,15 +24,18 @@ export function usePurchases() {
     }
   }, []);
 
-  useEffect(() => {
-    checkStatus();
-    const unsubscribe = Purchases.addCustomerInfoUpdateListener((info) => {
-      const hasPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
-      setIsPro(hasPro);
-      setCustomerInfo(info);
-    });
-    return () => unsubscribe();
-  }, [checkStatus]);
+   useEffect(() => {
+   checkStatus();
+   const listener = (info: CustomerInfo) => {
+     const hasPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
+     setIsPro(hasPro);
+     setCustomerInfo(info);
+   };
+   Purchases.addCustomerInfoUpdateListener(listener);
+   return () => {
+     Purchases.removeCustomerInfoUpdateListener(listener);
+   };
+ }, [checkStatus]);
 
   const purchasePro = useCallback(async () => {
     try {
