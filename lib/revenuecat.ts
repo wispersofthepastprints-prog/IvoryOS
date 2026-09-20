@@ -2,7 +2,7 @@
 import Purchases from 'react-native-purchases';
 
 const REVENUECAT_API_KEY = 'goog_izMOkTLKZKEEuEYlaelXGbiEtBQ'; // Test key
-// const REVENUECAT_API_KEY = 'goog_xxxxxxxxxxxx'; // Production key (swap when live)
+// const REVENUECAT_API_KEY = 'goog_izMOkTLKZKEEuEYlaelXGbiEtBQ'; // Production key (swap when live)
 
 export const OFFERING_ID = 'default';
 export const ENTITLEMENT_ID = 'pro';
