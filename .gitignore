@@ -2,3 +2,7 @@ node_modules/
 .expo/
 env.json
 .env*
+node_modules/
+.expo/
+env.json
+.env*
