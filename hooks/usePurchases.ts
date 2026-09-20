@@ -24,18 +24,20 @@ export function usePurchases() {
     }
   }, []);
 
-   useEffect(() => {
-   checkStatus();
-   const listener = (info: CustomerInfo) => {
-     const hasPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
-     setIsPro(hasPro);
-     setCustomerInfo(info);
-   };
-   Purchases.addCustomerInfoUpdateListener(listener);
-   return () => {
-     Purchases.removeCustomerInfoUpdateListener(listener);
-   };
- }, [checkStatus]);
+  useEffect(() => {
+    checkStatus();
+    // addCustomerInfoUpdateListener returns boolean, NOT an unsubscribe fn —
+    // keep a named listener and remove it explicitly.
+    const listener = (info: CustomerInfo) => {
+      const hasPro = info.entitlements.active[ENTITLEMENT_ID] !== undefined;
+      setIsPro(hasPro);
+      setCustomerInfo(info);
+    };
+    Purchases.addCustomerInfoUpdateListener(listener);
+    return () => {
+      Purchases.removeCustomerInfoUpdateListener(listener);
+    };
+  }, [checkStatus]);
 
   const purchasePro = useCallback(async () => {
     try {

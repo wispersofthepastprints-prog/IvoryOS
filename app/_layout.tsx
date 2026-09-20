@@ -31,10 +31,33 @@ export default function RootLayout() {
   }, []);
 
   const checkAuth = async () => {
+    // Local probe: no persisted tokens at all = definitively logged out
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setLoading(false);
+      router.replace("/login");
+      return;
+    }
+    // Server validation: tokens exist but Supabase rejects them = dead session
     const user = await getValidUser();
-    setIsAuthenticated(!!user);
     setLoading(false);
+    if (!user) {
+      router.replace("/login");
+    } else {
+      setIsAuthenticated(true);
+    }
   };
+
+  // Keep the URL honest: bounce between login and home as auth state changes
+  useEffect(() => {
+    if (loading) return;
+    const onAuthScreen = segments[0] === "login" || segments[0] === "register";
+    if (!isAuthenticated && !onAuthScreen) {
+      router.replace("/login");
+    } else if (isAuthenticated && onAuthScreen) {
+      router.replace("/");
+    }
+  }, [isAuthenticated, loading, segments]);
 
   if (loading) {
     return (
@@ -58,6 +81,10 @@ export default function RootLayout() {
       <Stack.Screen name="wedding-day/index" />
       <Stack.Screen name="calendar/index" />
       <Stack.Screen name="more" />
+      <Stack.Screen name="money/index" />
+      <Stack.Screen name="money/setup" />
+      <Stack.Screen name="money/add-expense" />
+      <Stack.Screen name="money/vault" />
     </Stack>
   );
 }

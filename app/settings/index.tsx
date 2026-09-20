@@ -9,6 +9,8 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { usePurchases } from "../../hooks/usePurchases";
 import { UpgradeButton } from "../../components/UpgradeButton";
@@ -338,6 +340,8 @@ export default function SettingsScreen() {
         onRequestClose={() => setEditModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingVertical: 24 }}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Profile</Text>
 
@@ -392,6 +396,8 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
           </View>
+          </ScrollView>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
