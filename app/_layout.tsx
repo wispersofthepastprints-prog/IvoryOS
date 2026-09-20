@@ -55,15 +55,9 @@ export default function RootLayout() {
       <Stack.Screen name="contracts/new" />
       <Stack.Screen name="contracts/[id]" />
       <Stack.Screen name="packages/index" />
-      <Stack.Screen name="packages/new" />
-      <Stack.Screen name="packages/[id]" />
       <Stack.Screen name="wedding-day/index" />
       <Stack.Screen name="calendar/index" />
       <Stack.Screen name="more" />
-      <Stack.Screen name="money/index" />
-      <Stack.Screen name="money/setup" />
-      <Stack.Screen name="money/add-expense" />
-      <Stack.Screen name="money/vault" />
     </Stack>
   );
 }

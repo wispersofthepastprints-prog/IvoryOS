@@ -1,34 +1,28 @@
-import { supabase } from './supabase';
+// lib/auth-check.ts
+import { supabase, getValidUser } from "./supabase";
 
 export async function checkAuth() {
-  let session = null;
-  let attempts = 0;
-  while (!session && attempts < 3) {
-    const { data } = await supabase.auth.getSession();
-    session = data?.session;
-    if (!session) {
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    attempts++;
-  }
-
-  const user = session?.user;
+  // Server-validated session check. getValidUser() asks Supabase to verify
+  // the token; getSession() alone returns stale/expired local sessions and
+  // lets the app boot into a "ghost" state where nothing can save.
+  const user = await getValidUser();
 
   if (!user) {
     return {
       ok: false,
-      error: 'session_expired',
-      message: 'Session expired. Please log out and log back in.',
+      error: "session_expired",
+      message: "Session expired. Please log out and log back in.",
     };
   }
 
   if (!user.email_confirmed_at) {
     return {
       ok: false,
-      error: 'email_not_verified',
-      message: 'Please verify your email before continuing. Check your inbox for the confirmation link.',
+      error: "email_not_verified",
+      message: "Please verify your email before continuing.",
     };
   }
 
-  return { ok: true, user, session };
+  const { data } = await supabase.auth.getSession();
+  return { ok: true, user, session: data?.session };
 }
