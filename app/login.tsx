@@ -24,7 +24,7 @@ export default function LoginScreen() {
     if (error) {
       Alert.alert("Error", error.message);
     } else {
-      router.replace("/");
+      router.replace(isLogin ? "/" : "/quiz");
     }
   };
 

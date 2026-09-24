@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import QuickActionButton from "../components/QuickActionButton";
+import { seedSampleData } from "../lib/seed";
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -47,6 +48,15 @@ export default function DashboardScreen() {
       setProfile(profileData);
 
       const photographerId = profileData?.id;
+
+      // v1.1: self-heal sample content for fresh accounts (idempotent)
+      if (profileData) {
+        const { count } = await supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("photographer_id", profileData.id);
+        if (count === 0) await seedSampleData(user.id);
+      }
 
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
@@ -146,6 +156,18 @@ export default function DashboardScreen() {
     if (!dateStr) return "";
     return new Date(dateStr).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
   };
+  
+    const hourNow = new Date().getHours();
+   const timeGreeting = hourNow < 12 ? "Good morning" : hourNow < 17 ? "Good afternoon" : "Good evening";
+   const QUIPS = [
+    "golden hour waits for no one",
+    "the best light is five minutes away",
+    "champagne fades, RAW files don't",
+    "backup cards. Always.",
+    "quiet moments make the loudest photos",
+    "the timeline is a living thing",
+  ];
+  const quip = QUIPS[new Date().getDate() % QUIPS.length];
 
   const upcomingTitle = data?.upcomingBooking?.title
     || (data?.upcomingClient?.full_name
@@ -167,7 +189,7 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.header}>
-          <Text style={styles.greeting}>Hi, {profile?.full_name?.split(" ")[0] || "there"} 👋</Text>
+          <Text style={styles.greeting}>{timeGreeting}, {profile?.full_name?.split(" ")[0] || "photographer"} — {quip}</Text>
         </View>
 
         <View style={styles.revenueCard}>
