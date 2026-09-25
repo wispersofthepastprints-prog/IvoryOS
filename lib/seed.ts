@@ -36,7 +36,10 @@ export async function seedSampleData(authId: string) {
         client_id: client.id,
         title: SAMPLE_TITLE,
         event_date: eventDate,
+        location: "Glen Innes, NSW",
         package_price: 450000,
+        deposit_amount: 112500,
+        balance_due: 337500,
         status: "confirmed",
         deposit_paid: false,
       });

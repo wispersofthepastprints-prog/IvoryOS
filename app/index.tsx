@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } 
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
-import QuickActionButton from "../components/QuickActionButton";
 import { seedSampleData } from "../lib/seed";
 
 export default function DashboardScreen() {
@@ -156,10 +155,10 @@ export default function DashboardScreen() {
     if (!dateStr) return "";
     return new Date(dateStr).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" });
   };
-  
-    const hourNow = new Date().getHours();
-   const timeGreeting = hourNow < 12 ? "Good morning" : hourNow < 17 ? "Good afternoon" : "Good evening";
-   const QUIPS = [
+
+  const hourNow = new Date().getHours();
+  const timeGreeting = hourNow < 12 ? "Good morning" : hourNow < 17 ? "Good afternoon" : "Good evening";
+  const QUIPS = [
     "golden hour waits for no one",
     "the best light is five minutes away",
     "champagne fades, RAW files don't",
@@ -174,6 +173,14 @@ export default function DashboardScreen() {
       ? (data.upcomingClient.partner_name ? `${data.upcomingClient.full_name} & ${data.upcomingClient.partner_name}` : data.upcomingClient.full_name)
       : null);
 
+  // --- Priority queue: one card, one action ---
+  const depositAction = data?.pendingActions?.find((a: any) => a.type === "payment");
+  const contractAction = data?.pendingActions?.find((a: any) => a.type === "contract");
+
+  const statLine = data
+    ? `${formatCurrency(data.monthlyRevenueCents || 0)} this month · ${data.bookingCount || 0} ${data.bookingCount === 1 ? "booking" : "bookings"}`
+    : "";
+
   if (loading) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -186,65 +193,80 @@ export default function DashboardScreen() {
     <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <View style={styles.header}>
-          <Text style={styles.greeting}>{timeGreeting}, {profile?.full_name?.split(" ")[0] || "photographer"} — {quip}</Text>
-        </View>
+        <Text style={styles.greeting}>{timeGreeting}, {profile?.full_name?.split(" ")[0] || "photographer"} — {quip}</Text>
 
-        <View style={styles.revenueCard}>
-          <Text style={styles.revenueLabel}>THIS MONTH</Text>
-          <Text style={styles.revenueAmount}>{formatCurrency(data?.monthlyRevenueCents || 0)}</Text>
-          <Text style={styles.revenueSubtext}>{data?.bookingCount || 0} bookings</Text>
-          {taxSetAside !== null && (
-            <Text style={styles.revenueSubtext}>
-              Tax set aside: <Text style={{ color: "#C9A227", fontWeight: "700" }}>{formatCurrency(taxSetAside)}</Text>
-            </Text>
-          )}
-        </View>
-
-        {data?.upcomingBooking && (
+        {/* ONE priority card: deposit → contract → next booking → calm */}
+        {depositAction ? (
           <TouchableOpacity
-            style={styles.upcomingCard}
+            style={styles.priorityCard}
+            onPress={() => router.push(`/bookings/${depositAction.booking_id}`)}
+          >
+            <Text style={styles.priorityLabel}>💰 DEPOSIT DUE</Text>
+            <Text style={styles.priorityTitle}>{depositAction.message}</Text>
+            {upcomingTitle && (
+              <Text style={styles.priorityDetail}>📍 {data?.upcomingBooking?.event_location || data?.upcomingBooking?.location || "Location TBA"}</Text>
+            )}
+            <Text style={styles.priorityCta}>Collect deposit →</Text>
+          </TouchableOpacity>
+        ) : contractAction ? (
+          <TouchableOpacity
+            style={styles.priorityCard}
+            onPress={() => router.push(`/bookings/${contractAction.booking_id}`)}
+          >
+            <Text style={styles.priorityLabel}>✍️ CONTRACT UNSIGNED</Text>
+            <Text style={styles.priorityTitle}>{contractAction.message}</Text>
+            <Text style={styles.priorityCta}>Send reminder →</Text>
+          </TouchableOpacity>
+        ) : data?.upcomingBooking ? (
+          <TouchableOpacity
+            style={styles.priorityCard}
             onPress={() => router.push(`/bookings/${data.upcomingBooking.id}`)}
           >
-            <Text style={styles.sectionLabel}>UPCOMING</Text>
-            {upcomingTitle && <Text style={styles.upcomingTitle}>{upcomingTitle}</Text>}
-            <Text style={styles.upcomingDetail}>📅 {formatDate(data.upcomingBooking.event_date)}</Text>
-            <Text style={styles.upcomingDetail}>📍 {data.upcomingBooking.event_location || data.upcomingBooking.location || "Location TBA"}</Text>
-            <Text style={styles.shotListText}>View Booking →</Text>
+            <Text style={styles.priorityLabel}>NEXT UP · {formatDate(data.upcomingBooking.event_date)}</Text>
+            {upcomingTitle && <Text style={styles.priorityTitle}>{upcomingTitle}</Text>}
+            <Text style={styles.priorityDetail}>📍 {data.upcomingBooking.event_location || data.upcomingBooking.location || "Location TBA"}</Text>
+            <Text style={styles.priorityCta}>View booking →</Text>
           </TouchableOpacity>
+        ) : (
+          <View style={styles.calmCard}>
+            <Text style={styles.calmEmoji}>🌤</Text>
+            <Text style={styles.calmTitle}>All caught up</Text>
+            <Text style={styles.calmSub}>Go make something beautiful.</Text>
+          </View>
         )}
 
-        <Text style={styles.sectionLabel}>QUICK ACTIONS</Text>
-        <View style={styles.actionsGrid}>
-          <View style={styles.actionsRow}>
-            <QuickActionButton icon="📝" label="New Job" onPress={() => router.push("/bookings/new")} />
-            <QuickActionButton icon="👤" label="New Client" onPress={() => router.push("/clients/new")} />
-            <QuickActionButton icon="📝" label="New Contract" onPress={() => router.push("/contracts/new")} />
-            <QuickActionButton icon="📧" label="Send Email" onPress={() => router.push("/emails")} />
-          </View>
-          <View style={styles.actionsRow}>
-            <QuickActionButton icon="💰" label="Send Invoice" onPress={() => router.push("/invoices")} />
-            <QuickActionButton icon="🧾" label="Add Expense" onPress={() => router.push("/money/add-expense")} />
-            <QuickActionButton icon="📦" label="New Package" onPress={() => router.push("/packages")} />
-          </View>
+        {/* Whisper line: stats, tap → Money */}
+        <TouchableOpacity style={styles.statLine} onPress={() => router.push("/money")}>
+          <Text style={styles.statText}>
+            {statLine}
+            {taxSetAside !== null && (
+              <Text> · tax aside <Text style={{ color: "#8A857A", fontWeight: "700" }}>{formatCurrency(taxSetAside)}</Text></Text>
+            )}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Four actions, one row */}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/bookings/new")}>
+            <Text style={styles.actionIcon}>📝</Text>
+            <Text style={styles.actionLabel}>New Job</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/clients/new")}>
+            <Text style={styles.actionIcon}>👤</Text>
+            <Text style={styles.actionLabel}>New Client</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/invoices")}>
+            <Text style={styles.actionIcon}>💰</Text>
+            <Text style={styles.actionLabel}>Invoice</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/more")}>
+            <Text style={styles.actionIcon}>⋯</Text>
+            <Text style={styles.actionLabel}>More</Text>
+          </TouchableOpacity>
         </View>
-
-        {data?.pendingActions && data.pendingActions.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>PENDING</Text>
-            {data.pendingActions.map((action: any) => (
-              <TouchableOpacity key={action.id} style={styles.pendingItem}>
-                <Text style={styles.pendingIcon}>⚠️</Text>
-                <View style={styles.pendingContent}>
-                  <Text style={styles.pendingText}>{action.message}</Text>
-                  {action.daysOverdue > 0 && <Text style={styles.pendingOverdue}>{action.daysOverdue} days overdue</Text>}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
 
         <View style={{ height: 100 + insets.bottom }} />
       </ScrollView>
@@ -252,7 +274,7 @@ export default function DashboardScreen() {
       <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom + 12, 28) }]}>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/")}>
           <Text style={styles.navIcon}>🏠</Text>
-          <Text style={styles.navLabel}>Home</Text>
+          <Text style={[styles.navLabel, { color: "#C9A227", fontWeight: "600" }]}>Home</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.navItem} onPress={() => router.push("/clients")}>
           <Text style={styles.navIcon}>👥</Text>
@@ -282,29 +304,26 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F8F6F0" },
   scrollView: { flex: 1 },
+  scrollContent: { paddingTop: 60 },
   center: { justifyContent: "center", alignItems: "center" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingTop: 60, paddingBottom: 16 },
-  greeting: { fontSize: 24, fontWeight: "700", color: "#0A0A0A" },
-  settings: { fontSize: 20 },
-  revenueCard: { backgroundColor: "#0A0A0A", marginHorizontal: 24, borderRadius: 20, padding: 24, marginBottom: 20 },
-  revenueLabel: { color: "#C9A227", fontSize: 12, fontWeight: "700", letterSpacing: 2, marginBottom: 8 },
-  revenueAmount: { color: "#F8F6F0", fontSize: 36, fontWeight: "800", marginBottom: 4 },
-  revenueSubtext: { color: "#999", fontSize: 14 },
-  upcomingCard: { backgroundColor: "#FFFFFF", marginHorizontal: 24, borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: "#E5E5E5" },
-  sectionLabel: { fontSize: 12, fontWeight: "700", color: "#999", letterSpacing: 1, marginHorizontal: 24, marginBottom: 12, marginTop: 8 },
-  upcomingTitle: { fontSize: 18, fontWeight: "700", color: "#0A0A0A", marginBottom: 8 },
-  upcomingDetail: { fontSize: 14, color: "#666", marginBottom: 4 },
-  shotListText: { color: "#C9A227", fontWeight: "600", fontSize: 14, marginTop: 8 },
-  actionsGrid: { marginHorizontal: 24, gap: 16, marginBottom: 16 },
-  actionsRow: { flexDirection: "row", justifyContent: "center", gap: 16 },
-  pendingItem: { flexDirection: "row", backgroundColor: "#FFFFFF", marginHorizontal: 24, padding: 16, borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: "#FEE2E2" },
-  pendingIcon: { fontSize: 20, marginRight: 12 },
-  pendingContent: { flex: 1 },
-  pendingText: { fontSize: 14, color: "#0A0A0A", fontWeight: "500" },
-  pendingOverdue: { fontSize: 12, color: "#DC2626", marginTop: 2 },
+  greeting: { fontSize: 22, fontWeight: "700", color: "#0A0A0A", paddingHorizontal: 24, marginBottom: 20 },
+  priorityCard: { backgroundColor: "#0A0A0A", marginHorizontal: 24, borderRadius: 20, padding: 22, marginBottom: 12 },
+  priorityLabel: { color: "#C9A227", fontSize: 12, fontWeight: "700", letterSpacing: 2, marginBottom: 8 },
+  priorityTitle: { color: "#F8F6F0", fontSize: 19, fontWeight: "700", marginBottom: 4 },
+  priorityDetail: { color: "#999", fontSize: 14, marginBottom: 4 },
+  priorityCta: { color: "#C9A227", fontWeight: "600", fontSize: 14, marginTop: 8 },
+  calmCard: { backgroundColor: "#FFFFFF", marginHorizontal: 24, borderRadius: 20, padding: 28, marginBottom: 12, alignItems: "center", borderWidth: 1, borderColor: "#E5E5E5" },
+  calmEmoji: { fontSize: 28, marginBottom: 8 },
+  calmTitle: { fontSize: 18, fontWeight: "700", color: "#0A0A0A" },
+  calmSub: { fontSize: 14, color: "#999", marginTop: 4 },
+  statLine: { marginHorizontal: 24, paddingVertical: 10, marginBottom: 12 },
+  statText: { fontSize: 13, color: "#8A857A" },
+  actionsRow: { flexDirection: "row", marginHorizontal: 24, gap: 10 },
+  actionBtn: { flex: 1, backgroundColor: "#FFFFFF", borderRadius: 14, paddingVertical: 14, alignItems: "center", borderWidth: 1, borderColor: "#E5E5E5" },
+  actionIcon: { fontSize: 20, marginBottom: 4 },
+  actionLabel: { fontSize: 12, color: "#0A0A0A", fontWeight: "600" },
   bottomNav: { flexDirection: "row", justifyContent: "space-around", paddingVertical: 12, backgroundColor: "#FFFFFF", borderTopWidth: 1, borderTopColor: "#E5E5E5", position: "absolute", bottom: 0, left: 0, right: 0 },
   navItem: { alignItems: "center", flex: 1 },
   navIcon: { fontSize: 20, marginBottom: 4 },
   navLabel: { fontSize: 11, color: "#999" },
-  navLabelActive: { fontSize: 11, color: "#C9A227", fontWeight: "600" },
 });
