@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
   },
-  rowLabel: { fontSize: 15, color: "#0A0A0A", fontWeight: "600" },
+  rowLabel: { fontSize: 15, color: "#0A0A0A", fontWeight: "600", flex: 1, marginRight: 12 },
   rowValue: { fontSize: 14, color: "#999" },
   connectButton: {
     backgroundColor: "#E8F0FE",
