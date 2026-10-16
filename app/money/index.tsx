@@ -1,12 +1,14 @@
 import { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as WebBrowser from "expo-web-browser";
 import { supabase } from "../../lib/supabase";
 import {
   getLedgerSettings, monthIncomeCents, vaultTotalsCents,
   recentActivity, formatAUD,
 } from "../../lib/ledger";
+import { receiptSignedUrl } from "../../lib/receipts";
 
 export default function MoneyScreen() {
   const router = useRouter();
@@ -59,6 +61,15 @@ export default function MoneyScreen() {
 
   useEffect(() => { fetchAll(); }, []);
   useFocusEffect(useCallback(() => { fetchAll(); }, []));
+
+  const openReceipt = async (path: string) => {
+    try {
+      const url = await receiptSignedUrl(path);
+      await WebBrowser.openBrowserAsync(url);
+    } catch (e: any) {
+      Alert.alert("Couldn't open receipt", e.message || "Try again");
+    }
+  };
 
   if (loading) return <View style={[styles.container, styles.center]}><Text>Loading...</Text></View>;
 
@@ -133,7 +144,7 @@ export default function MoneyScreen() {
             <Text style={{ fontSize: 24 }}>🧾</Text>
             <Text style={styles.quickLabel}>Add Expense</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickBtn} onPress={() => router.push("/money/add-expense")}>
+          <TouchableOpacity style={styles.quickBtn} onPress={() => router.push("/money/add-expense?snap=1")}>
             <Text style={{ fontSize: 24 }}>📷</Text>
             <Text style={styles.quickLabel}>Snap Receipt</Text>
           </TouchableOpacity>
@@ -148,18 +159,31 @@ export default function MoneyScreen() {
         {activity.length === 0 && (
           <Text style={styles.emptyText}>No activity yet. Paid invoices will appear here automatically.</Text>
         )}
-        {activity.map((item) => (
-          <View key={`${item.kind}-${item.id}`} style={styles.rowCard}>
-            <Text style={styles.rowIcon}>{item.kind === "income" ? "💵" : "🧾"}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>{item.label}</Text>
-              <Text style={styles.rowSub}>{item.category} — {new Date(item.when).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}</Text>
+        {activity.map((item) => {
+          const hasReceipt = item.kind === "expense" && !!item.receiptPath;
+          const row = (
+            <View style={styles.rowCard}>
+              <Text style={styles.rowIcon}>{item.kind === "income" ? "💵" : "🧾"}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>{item.label}</Text>
+                <Text style={styles.rowSub}>
+                  {item.category} — {new Date(item.when).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                  {hasReceipt ? "  ·  📎 receipt" : ""}
+                </Text>
+              </View>
+              <Text style={[styles.rowAmount, { color: item.amountCents >= 0 ? "#166534" : "#0A0A0A" }]}>
+                {item.amountCents >= 0 ? "+" : ""}{formatAUD(Math.abs(item.amountCents))}
+              </Text>
             </View>
-            <Text style={[styles.rowAmount, { color: item.amountCents >= 0 ? "#166534" : "#0A0A0A" }]}>
-              {item.amountCents >= 0 ? "+" : ""}{formatAUD(Math.abs(item.amountCents))}
-            </Text>
-          </View>
-        ))}
+          );
+          return hasReceipt ? (
+            <TouchableOpacity key={`${item.kind}-${item.id}`} onPress={() => openReceipt(item.receiptPath)}>
+              {row}
+            </TouchableOpacity>
+          ) : (
+            <View key={`${item.kind}-${item.id}`}>{row}</View>
+          );
+        })}
 
         <Text style={styles.disclaimer}>
           Ivory Ledger provides record-keeping and estimates only. It is not tax, legal, or financial advice. Figures should be verified with a registered tax agent.
