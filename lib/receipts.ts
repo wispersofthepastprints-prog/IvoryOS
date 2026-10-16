@@ -6,6 +6,11 @@
 // time so links always expire and can't be shared permanently.
 import { supabase } from "./supabase";
 import * as ImagePicker from "expo-image-picker";
+// Hermes (RN engine) cannot build a Blob from a fetched file, so we read
+// the picked photo as base64 and decode it to an ArrayBuffer for upload —
+// the pattern Supabase documents for React Native.
+import * as FileSystem from "expo-file-system/legacy";
+import { decode } from "base64-arraybuffer";
 
 const BUCKET = "receipts";
 
@@ -34,9 +39,11 @@ export async function uploadReceipt(local: PickedReceipt): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Not logged in");
   const path = `${user.id}/${Date.now()}.jpg`;
-  const resp = await fetch(local.uri);
-  const blob = await resp.blob();
-  const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
+  const base64 = await FileSystem.readAsStringAsync(local.uri, {
+    encoding: "base64",
+  });
+  const buffer = decode(base64);
+  const { error } = await supabase.storage.from(BUCKET).upload(path, buffer, {
     contentType: local.mimeType,
     upsert: false,
   });
