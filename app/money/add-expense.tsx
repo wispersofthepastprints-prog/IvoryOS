@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Switch } from "react-native";
-import { useRouter } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Alert, Switch } from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { addExpense, getLedgerSettings, gstFromTotal, EXPENSE_CATEGORIES } from "../../lib/ledger";
+import { pickReceipt, uploadReceipt, PickedReceipt } from "../../lib/receipts";
 
 export default function AddExpenseScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { snap } = useLocalSearchParams<{ snap?: string }>();
   const [amount, setAmount] = useState("");
   const [merchant, setMerchant] = useState("");
   const [category, setCategory] = useState("Other");
@@ -14,7 +16,10 @@ export default function AddExpenseScreen() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [gstIncluded, setGstIncluded] = useState(true);
   const [gstRegistered, setGstRegistered] = useState(false);
+  const [receipt, setReceipt] = useState<PickedReceipt | null>(null);
+  const [attaching, setAttaching] = useState(false);
   const [saving, setSaving] = useState(false);
+  const snapHandled = useRef(false);
 
   useEffect(() => {
     getLedgerSettings().then((s: any) => {
@@ -22,18 +27,42 @@ export default function AddExpenseScreen() {
     });
   }, []);
 
+  // "Snap Receipt" quick action lands here with ?snap=1 → straight to camera
+  useEffect(() => {
+    if (snap === "1" && !snapHandled.current) {
+      snapHandled.current = true;
+      attach(true);
+    }
+  }, [snap]);
+
+  const attach = async (fromCamera: boolean) => {
+    setAttaching(true);
+    try {
+      const picked = await pickReceipt(fromCamera);
+      if (picked) setReceipt(picked);
+    } catch (e: any) {
+      Alert.alert("Couldn't get photo", e.message || "Try again");
+    } finally {
+      setAttaching(false);
+    }
+  };
+
   const save = async () => {
     const dollars = parseFloat(amount);
     if (isNaN(dollars) || dollars <= 0) { Alert.alert("Enter an amount", "How much was the expense?"); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { Alert.alert("Check the date", "Use YYYY-MM-DD."); return; }
     setSaving(true);
     try {
+      let receiptPath: string | undefined;
+      if (receipt) receiptPath = await uploadReceipt(receipt);
       const totalCents = Math.round(dollars * 100);
       await addExpense({
         amount: dollars,
         gst_amount: gstRegistered && gstIncluded ? gstFromTotal(totalCents) / 100 : 0,
         merchant: merchant || undefined,
         category, note: note || undefined, spent_at: date,
+        source: receiptPath ? "receipt" : "manual",
+        receipt_image_url: receiptPath,
       });
       router.back();
     } catch (e: any) {
@@ -89,6 +118,30 @@ export default function AddExpenseScreen() {
       <Text style={styles.label}>NOTE (OPTIONAL)</Text>
       <TextInput style={styles.input} value={note} onChangeText={setNote} placeholder="e.g. New lens for Smith wedding" placeholderTextColor="#999" />
 
+      <Text style={styles.label}>RECEIPT (OPTIONAL)</Text>
+      {receipt ? (
+        <View style={styles.receiptPreview}>
+          <Image source={{ uri: receipt.uri }} style={styles.receiptThumb} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#0A0A0A" }}>Receipt attached</Text>
+            <TouchableOpacity onPress={() => setReceipt(null)}>
+              <Text style={{ color: "#B3261E", marginTop: 4, fontSize: 13 }}>Remove</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.receiptRow}>
+          <TouchableOpacity style={styles.receiptBtn} onPress={() => attach(true)} disabled={attaching}>
+            <Text style={{ fontSize: 20 }}>📷</Text>
+            <Text style={styles.receiptBtnText}>{attaching ? "Opening…" : "Take Photo"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.receiptBtn} onPress={() => attach(false)} disabled={attaching}>
+            <Text style={{ fontSize: 20 }}>🖼</Text>
+            <Text style={styles.receiptBtnText}>{attaching ? "Opening…" : "From Library"}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <TouchableOpacity style={styles.goldButton} onPress={save} disabled={saving}>
         <Text style={styles.goldButtonText}>{saving ? "Saving..." : "Save Expense"}</Text>
       </TouchableOpacity>
@@ -110,6 +163,11 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: "#0A0A0A", borderColor: "#0A0A0A" },
   chipText: { fontSize: 13, color: "#0A0A0A" },
   chipTextActive: { color: "#C9A227", fontWeight: "700" },
+  receiptPreview: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFFFFF", marginHorizontal: 24, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#E5E5E5", gap: 12 },
+  receiptThumb: { width: 56, height: 56, borderRadius: 8, backgroundColor: "#E5E5E5" },
+  receiptRow: { flexDirection: "row", gap: 12, marginHorizontal: 24 },
+  receiptBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#FFFFFF", borderRadius: 12, paddingVertical: 14, borderWidth: 1, borderColor: "#E5E5E5", gap: 8 },
+  receiptBtnText: { fontSize: 13, fontWeight: "600", color: "#0A0A0A" },
   goldButton: { backgroundColor: "#C9A227", borderRadius: 12, paddingVertical: 18, marginHorizontal: 24, marginTop: 32, alignItems: "center" },
   goldButtonText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700" },
 });
