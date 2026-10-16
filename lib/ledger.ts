@@ -118,6 +118,7 @@ export async function recentActivity(limit = 20) {
       id: e.id, kind: "expense" as const, label: e.merchant || "Expense",
       amountCents: -Math.round(e.amount * 100), category: e.category,
       when: e.spent_at, source: e.source,
+      receiptPath: e.receipt_image_url ?? null, // storage path; null = no receipt
     })),
     ...(income || []).map((i: any) => ({
       id: i.id, kind: "income" as const, label: i.category || "Income",
