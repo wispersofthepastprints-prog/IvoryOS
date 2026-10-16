@@ -3,7 +3,7 @@
     "name": "Ivory OS",
     "slug": "ivory-os",
     "scheme": "ivoryos",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -20,7 +20,7 @@
       "bundleIdentifier": "com.wispersofthepast.ivoryos"
     },
     "android": {
-      "versionCode": 52,
+      "versionCode": 53,
       "enableProguardInReleaseBuilds": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -35,6 +35,13 @@
     "plugins": [
       "expo-router",
       "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Ivory OS to attach receipt photos to your expense records.",
+          "cameraPermission": "Allow Ivory OS to photograph receipts for your expense records."
+        }
+      ],
       "@react-native-community/datetimepicker"
     ],
     "extra": {
