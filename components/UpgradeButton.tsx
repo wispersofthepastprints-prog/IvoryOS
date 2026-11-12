@@ -8,10 +8,16 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import Purchases, { PACKAGE_TYPE } from 'react-native-purchases';
+import Purchases, { PACKAGE_TYPE, PurchasesPackage } from 'react-native-purchases';
 import { usePurchases } from '../hooks/usePurchases';
 
-const PLAN_DETAILS: Record<string, any> = {
+type PlanDetails = {
+  title: string;
+  period: 'year' | 'month';
+  badge: string | null;
+};
+
+const PLAN_DETAILS: Record<string, PlanDetails> = {
   [PACKAGE_TYPE.ANNUAL]: {
     title: 'Yearly',
     period: 'year',
@@ -26,9 +32,9 @@ const PLAN_DETAILS: Record<string, any> = {
 
 export function UpgradeButton() {
   const { isPro, restore, refresh } = usePurchases();
-  const [packages, setPackages] = useState<any[]>([]);
+  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [purchasing, setPurchasing] = useState(false);
-  const [selectedPkg, setSelectedPkg] = useState<any>(null);
+  const [selectedPkg, setSelectedPkg] = useState<PurchasesPackage | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -54,29 +60,30 @@ export function UpgradeButton() {
     return <Text style={styles.proBadge}>✓ Pro Member</Text>;
   }
 
+  // RevenueCat v10 exposes Google Play product data as package.product.
   // Google Play is the source of truth. Never substitute a hardcoded price.
-  const getPrice = (pkg: any) => {
+  const getPrice = (pkg: PurchasesPackage | null) => {
     if (!pkg) return '';
-    return pkg.storeProduct?.priceString || '';
+    return pkg.product.priceString || '';
   };
 
-  const getPeriod = (pkg: any) => {
+  const getPeriod = (pkg: PurchasesPackage | null) => {
     if (!pkg) return 'month';
     return PLAN_DETAILS[pkg.packageType]?.period || 'month';
   };
 
-  const getTitle = (pkg: any) => {
+  const getTitle = (pkg: PurchasesPackage | null) => {
     if (!pkg) return '';
     return PLAN_DETAILS[pkg.packageType]?.title || pkg.packageType;
   };
 
-  const getSavings = (pkg: any) => {
+  const getSavings = (pkg: PurchasesPackage | null) => {
     if (!pkg || pkg.packageType !== PACKAGE_TYPE.ANNUAL) return null;
 
     const monthlyPkg = packages.find((p) => p.packageType === PACKAGE_TYPE.MONTHLY);
-    const annualPrice = pkg.storeProduct?.price;
-    const monthlyPrice = monthlyPkg?.storeProduct?.price;
-    const currencyCode = pkg.storeProduct?.currencyCode || monthlyPkg?.storeProduct?.currencyCode;
+    const annualPrice = pkg.product.price;
+    const monthlyPrice = monthlyPkg?.product.price;
+    const currencyCode = pkg.product.currencyCode || monthlyPkg?.product.currencyCode;
 
     if (
       typeof annualPrice !== 'number' ||
@@ -103,7 +110,7 @@ export function UpgradeButton() {
     }
   };
 
-  const getBadge = (pkg: any) => {
+  const getBadge = (pkg: PurchasesPackage | null) => {
     if (!pkg) return null;
     return PLAN_DETAILS[pkg.packageType]?.badge;
   };
@@ -140,7 +147,7 @@ export function UpgradeButton() {
     }
   };
 
-  const renderOption = (pkg: any) => {
+  const renderOption = (pkg: PurchasesPackage) => {
     const isSelected = selectedPkg?.identifier === pkg.identifier;
     const price = getPrice(pkg);
     const title = getTitle(pkg);
