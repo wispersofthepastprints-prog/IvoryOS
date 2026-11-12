@@ -40,11 +40,25 @@ export async function signInWithGoogle(): Promise<void> {
 }
 
 export async function getStoredToken(): Promise<string | null> {
-  return await AsyncStorage.getItem(TOKEN_KEY);
+  // Renew short-lived access on the server. The refresh token never reaches the app.
+  const { data, error } = await supabase.functions.invoke('google-calendar-token');
+  if (error || !data?.access_token) {
+    await clearStoredToken();
+    return null;
+  }
+  await AsyncStorage.setItem(TOKEN_KEY, data.access_token);
+  return data.access_token;
 }
 
 export async function clearStoredToken(): Promise<void> {
   await AsyncStorage.removeItem(TOKEN_KEY);
+}
+
+// Google all-day events use an exclusive end date.
+function followingDate(dateString: string): string {
+  const date = new Date(`${dateString}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + 1);
+  return date.toISOString().split('T')[0];
 }
 
 export async function createCalendarEvent(accessToken: string, event: {
@@ -65,7 +79,7 @@ export async function createCalendarEvent(accessToken: string, event: {
       description: event.description,
       location: event.location,
       start: { date: event.startDate },
-      end: { date: event.endDate },
+      end: { date: followingDate(event.endDate) },
     }),
   });
 
@@ -75,17 +89,4 @@ export async function createCalendarEvent(accessToken: string, event: {
   }
 
   return await response.json();
-}
-
-export async function deleteCalendarEvent(accessToken: string, eventId: string) {
-  const response = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
-    {
-      method: 'DELETE',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    }
-  );
-  return response.ok;
 }

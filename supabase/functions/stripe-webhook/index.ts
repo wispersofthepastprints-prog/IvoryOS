@@ -6,73 +6,119 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
   httpClient: Stripe.createFetchHttpClient(),
 });
 
-const supabaseUrl = Deno.env.get("PROJECT_URL") || "";
-const supabaseServiceKey = Deno.env.get("SERVICE_ROLE_KEY") || "";
+const supabaseUrl = Deno.env.get("SUPABASE_URL") || Deno.env.get("PROJECT_URL") || "";
+const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SERVICE_ROLE_KEY") || "";
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET") || "";
 
-serve(async (req) => {
-  const signature = req.headers.get("stripe-signature");
-  const body = await req.text();
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+    status,
+  });
+}
 
-  let event;
+serve(async (req) => {
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+  const signature = req.headers.get("stripe-signature");
+  if (!signature) return json({ error: "Missing Stripe signature" }, 400);
+
+  const body = await req.text();
+  let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, signature || "", webhookSecret);
+    event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
   } catch (err: any) {
-    console.error("Webhook signature verification failed:", err.message);
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+    console.error("Webhook signature verification failed:", err?.message || String(err));
+    return json({ error: "Invalid Stripe signature" }, 400);
+  }
+
+  if (event.type !== "checkout.session.completed") return json({ received: true });
+
+  const session = event.data.object as Stripe.Checkout.Session;
+  // IvoryOS subscriptions use Google Play/RevenueCat, never Stripe.
+  if (session.mode !== "payment") return json({ received: true });
+  if (session.payment_status !== "paid") return json({ received: true });
+
+  const bookingId = session.metadata?.booking_id;
+  const photographerId = session.metadata?.photographer_id;
+  const paymentType = session.metadata?.payment_type;
+  if (!bookingId || !photographerId || (paymentType !== "deposit" && paymentType !== "balance")) {
+    console.error("Payment webhook rejected: incomplete metadata", { eventId: event.id });
+    return json({ error: "Invalid payment metadata" }, 400);
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const { data: booking, error: bookingError } = await supabase
+    .from("bookings")
+    .select("id, photographer_id, deposit_amount, balance_due, platform_fee_percent")
+    .eq("id", bookingId)
+    .eq("photographer_id", photographerId)
+    .single();
 
-  // Handle subscription payments (Pro upgrade)
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const authId = session.client_reference_id;
-
-    // Subscription payment (Pro upgrade)
-    if (session.mode === "subscription" && authId) {
-      const { error } = await supabase
-        .from("photographers")
-        .update({
-          subscription_tier: "pro",
-          subscription_status: "active",
-          stripe_customer_id: session.customer,
-        })
-        .eq("auth_id", authId);
-
-      if (error) {
-        console.error("Failed to upgrade photographer:", error);
-        return new Response("Database error", { status: 500 });
-      }
-      console.log(`Upgraded photographer ${authId} to Pro`);
-    }
-
-    // One-time payment (Deposit or Balance)
-    if (session.mode === "payment") {
-      const bookingId = session.metadata?.booking_id;
-      const paymentType = session.metadata?.payment_type;
-
-      if (bookingId && paymentType) {
-        const updateData = paymentType === "deposit" 
-          ? { deposit_paid: true } 
-          : { balance_paid: true };
-
-        const { error } = await supabase
-          .from("bookings")
-          .update(updateData)
-          .eq("id", bookingId);
-
-        if (error) {
-          console.error("Failed to update booking payment:", error);
-          return new Response("Database error", { status: 500 });
-        }
-        console.log(`Marked ${paymentType} as paid for booking ${bookingId}`);
-      }
-    }
+  if (bookingError || !booking) {
+    console.error("Payment webhook rejected: booking mismatch", { eventId: event.id });
+    return json({ error: "Booking mismatch" }, 400);
   }
 
-  return new Response(JSON.stringify({ received: true }), {
-    headers: { "Content-Type": "application/json" },
-    status: 200,
-  });
+  const expectedAmount = paymentType === "deposit" ? booking.deposit_amount : booking.balance_due;
+  const expectedFee = Math.round(expectedAmount * ((booking.platform_fee_percent ?? 10) / 100));
+  if (
+    !Number.isInteger(expectedAmount) ||
+    expectedAmount <= 0 ||
+    session.amount_total !== expectedAmount ||
+    session.currency !== "aud" ||
+    session.metadata?.expected_amount !== String(expectedAmount) ||
+    session.metadata?.platform_fee !== String(expectedFee)
+  ) {
+    console.error("Payment webhook rejected: amount or currency mismatch", { eventId: event.id });
+    return json({ error: "Payment amount mismatch" }, 400);
+  }
+
+  if (typeof session.payment_intent !== "string") {
+    console.error("Payment webhook rejected: missing payment intent", { eventId: event.id });
+    return json({ error: "Missing payment intent" }, 400);
+  }
+
+  const { data: photographer, error: photographerError } = await supabase
+    .from("photographers")
+    .select("stripe_connect_account_id")
+    .eq("id", photographerId)
+    .single();
+  if (photographerError || !photographer?.stripe_connect_account_id) {
+    console.error("Payment webhook rejected: connected account missing", { eventId: event.id });
+    return json({ error: "Connected account mismatch" }, 400);
+  }
+
+  const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent);
+  const destination = paymentIntent.transfer_data?.destination;
+  const destinationId = typeof destination === "string" ? destination : destination?.id;
+  if (
+    paymentIntent.status !== "succeeded" ||
+    paymentIntent.amount_received !== expectedAmount ||
+    paymentIntent.currency !== "aud" ||
+    paymentIntent.application_fee_amount !== expectedFee ||
+    destinationId !== photographer.stripe_connect_account_id
+  ) {
+    console.error("Payment webhook rejected: settlement mismatch", { eventId: event.id });
+    return json({ error: "Payment settlement mismatch" }, 400);
+  }
+
+  const paidField = paymentType === "deposit" ? "deposit_paid" : "balance_paid";
+  const { error: updateError } = await supabase
+    .from("bookings")
+    .update({
+      [paidField]: true,
+      stripe_payment_intent_id: paymentIntent.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", booking.id)
+    .eq("photographer_id", photographerId);
+
+  if (updateError) {
+    console.error("Failed to record booking payment:", updateError.message);
+    return json({ error: "Database error" }, 500);
+  }
+
+  console.log(`Recorded ${paymentType} payment for booking ${booking.id}`);
+  return json({ received: true });
 });
