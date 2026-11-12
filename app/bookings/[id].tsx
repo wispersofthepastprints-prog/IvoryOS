@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Share } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { supabase, getValidUser } from "../../lib/supabase";
-import * as WebBrowser from "expo-web-browser";
 
 const BACKEND_URL = "https://ewqbywvhgujwkqnxvuqi.supabase.co/functions/v1";
 
@@ -12,6 +11,7 @@ export default function BookingDetailScreen() {
   const [booking, setBooking] = useState<any>(null);
   const [client, setClient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [creatingPayment, setCreatingPayment] = useState<"deposit" | "balance" | null>(null);
 
   useEffect(() => { fetchBooking(); }, [id]);
 
@@ -68,21 +68,16 @@ export default function BookingDetailScreen() {
   };
 
   const createPayment = async (type: "deposit" | "balance") => {
+    if (creatingPayment) return;
+    setCreatingPayment(type);
     try {
-      // Validate booking has required financial fields
       const amount = type === "deposit" ? booking?.deposit_amount : booking?.balance_due;
-
       if (!amount || amount <= 0) {
-        Alert.alert(
-          "Missing Payment Amount",
-          `This booking does not have a ${type} amount set. Please edit the booking to add a ${type} amount.`,
-          [{ text: "OK" }]
-        );
+        Alert.alert("Missing Payment Amount", `This booking does not have a ${type} amount set.`);
         return;
       }
-
       if (!client?.email) {
-        Alert.alert("No Client Email", "The client does not have an email address. Add one in the client profile.");
+        Alert.alert("No Client Email", "Add the client's email address to their profile before sharing a payment link.");
         return;
       }
 
@@ -91,50 +86,46 @@ export default function BookingDetailScreen() {
         Alert.alert("Session Expired", "Please log out and log back in.");
         return;
       }
-
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
-
       if (!accessToken) {
         Alert.alert("Authentication Error", "Could not get access token. Please log in again.");
         return;
       }
 
+      // The server derives the amount, owner, client and fee from the booking.
       const response = await fetch(`${BACKEND_URL}/create-payment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({
-          booking_id: booking.id,
-          photographer_id: booking.photographer_id,
-          type,
-          amount,
-          client_email: client.email,
-          description: `${booking.title || "Booking"} - ${type === "deposit" ? "Deposit" : "Balance"}`,
-        }),
+        body: JSON.stringify({ booking_id: booking.id, type }),
       });
-
       const result = await response.json();
 
-      if (result.url) {
-        await WebBrowser.openBrowserAsync(result.url);
-        fetchBooking(); // Refresh after payment
-      } else if (result.error?.includes("not connected") || result.error?.includes("stripe")) {
+      if (response.ok && result.url) {
+        const paymentLabel = type === "deposit" ? "deposit" : "balance";
+        await Share.share({
+          title: `Booking ${paymentLabel} payment`,
+          message: `Hi ${client.full_name || "there"},\n\nYour ${paymentLabel} payment of A$${(amount / 100).toFixed(2)} for your photography booking is ready:\n${result.url}`,
+        });
+      } else if (result.error?.toLowerCase().includes("connect your bank")) {
         Alert.alert(
           "Bank Account Required",
-          "You need to connect your bank account in Settings before you can send invoices to clients.",
+          "Connect your bank account in Settings before creating a client payment link.",
           [
             { text: "Cancel", style: "cancel" },
             { text: "Connect Bank", onPress: () => router.push("/settings") }
           ]
         );
       } else {
-        Alert.alert("Error", result.error || "Could not create payment");
+        Alert.alert("Payment Link Unavailable", result.error || "Could not create payment link.");
       }
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Something went wrong creating the payment.");
+      Alert.alert("Error", err.message || "Something went wrong creating the payment link.");
+    } finally {
+      setCreatingPayment(null);
     }
   };
 
@@ -239,19 +230,19 @@ export default function BookingDetailScreen() {
 
         {booking.status === "inquiry" && (
           <TouchableOpacity style={styles.actionButton} onPress={() => updateStatus("contracted")}>
-            <Text style={styles.actionText}>📄 Send Contract</Text>
+            <Text style={styles.actionText}>📄 Mark Contract Sent</Text>
           </TouchableOpacity>
         )}
 
         {(booking.status === "contracted" || booking.status === "confirmed") && !booking.deposit_paid && (
-          <TouchableOpacity style={styles.payButton} onPress={() => createPayment("deposit")}>
-            <Text style={styles.payText}>💰 Send Deposit Invoice ({formatCurrency(booking.deposit_amount)})</Text>
+          <TouchableOpacity style={[styles.payButton, creatingPayment !== null && styles.disabled]} onPress={() => createPayment("deposit")} disabled={creatingPayment !== null}>
+            <Text style={styles.payText}>{creatingPayment === "deposit" ? "Creating Deposit Link…" : `💰 Share Deposit Payment Link (${formatCurrency(booking.deposit_amount)})`}</Text>
           </TouchableOpacity>
         )}
 
         {booking.deposit_paid && !booking.balance_paid && (
-          <TouchableOpacity style={styles.payButton} onPress={() => createPayment("balance")}>
-            <Text style={styles.payText}>💰 Send Balance Invoice ({formatCurrency(booking.balance_due)})</Text>
+          <TouchableOpacity style={[styles.payButton, creatingPayment !== null && styles.disabled]} onPress={() => createPayment("balance")} disabled={creatingPayment !== null}>
+            <Text style={styles.payText}>{creatingPayment === "balance" ? "Creating Balance Link…" : `💰 Share Balance Payment Link (${formatCurrency(booking.balance_due)})`}</Text>
           </TouchableOpacity>
         )}
 
@@ -293,7 +284,8 @@ const styles = StyleSheet.create({
   actionButton: { backgroundColor: "#DBEAFE", paddingVertical: 16, borderRadius: 12, alignItems: "center", marginTop: 8 },
   actionText: { color: "#2563EB", fontSize: 16, fontWeight: "700" },
   payButton: { backgroundColor: "#C9A227", paddingVertical: 16, borderRadius: 12, alignItems: "center", marginTop: 8 },
-  payText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700" },
+  payText: { color: "#0A0A0A", fontSize: 16, fontWeight: "700", textAlign: "center" },
+  disabled: { opacity: 0.6 },
   paidText: { fontSize: 16, color: "#059669", fontWeight: "700", textAlign: "center", marginTop: 8 },
   deleteButton: { marginHorizontal: 24, marginTop: 4, paddingVertical: 16, borderRadius: 12, alignItems: "center", borderWidth: 1, borderColor: "#FCA5A5" },
   deleteText: { color: "#DC2626", fontSize: 16, fontWeight: "700" },
