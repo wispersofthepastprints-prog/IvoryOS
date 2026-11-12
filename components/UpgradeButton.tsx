@@ -11,20 +11,16 @@ import {
 import Purchases, { PACKAGE_TYPE } from 'react-native-purchases';
 import { usePurchases } from '../hooks/usePurchases';
 
-const FALLBACK_DETAILS: Record<string, any> = {
+const PLAN_DETAILS: Record<string, any> = {
   [PACKAGE_TYPE.ANNUAL]: {
     title: 'Yearly',
-    fallbackPrice: '$489',
     period: 'year',
     badge: 'BEST VALUE',
-    savings: 'Save $98 — 2 months free',
   },
   [PACKAGE_TYPE.MONTHLY]: {
     title: 'Monthly',
-    fallbackPrice: '$48.99',
     period: 'month',
     badge: null,
-    savings: null,
   },
 };
 
@@ -58,34 +54,63 @@ export function UpgradeButton() {
     return <Text style={styles.proBadge}>✓ Pro Member</Text>;
   }
 
+  // Google Play is the source of truth. Never substitute a hardcoded price.
   const getPrice = (pkg: any) => {
     if (!pkg) return '';
-    return pkg.storeProduct?.priceString || FALLBACK_DETAILS[pkg.packageType]?.fallbackPrice || '';
+    return pkg.storeProduct?.priceString || '';
   };
 
   const getPeriod = (pkg: any) => {
     if (!pkg) return 'month';
-    return FALLBACK_DETAILS[pkg.packageType]?.period || 'month';
+    return PLAN_DETAILS[pkg.packageType]?.period || 'month';
   };
 
   const getTitle = (pkg: any) => {
     if (!pkg) return '';
-    return FALLBACK_DETAILS[pkg.packageType]?.title || pkg.packageType;
+    return PLAN_DETAILS[pkg.packageType]?.title || pkg.packageType;
   };
 
   const getSavings = (pkg: any) => {
-    if (!pkg) return null;
-    return FALLBACK_DETAILS[pkg.packageType]?.savings;
+    if (!pkg || pkg.packageType !== PACKAGE_TYPE.ANNUAL) return null;
+
+    const monthlyPkg = packages.find((p) => p.packageType === PACKAGE_TYPE.MONTHLY);
+    const annualPrice = pkg.storeProduct?.price;
+    const monthlyPrice = monthlyPkg?.storeProduct?.price;
+    const currencyCode = pkg.storeProduct?.currencyCode || monthlyPkg?.storeProduct?.currencyCode;
+
+    if (
+      typeof annualPrice !== 'number' ||
+      typeof monthlyPrice !== 'number' ||
+      monthlyPrice <= 0 ||
+      !currencyCode
+    ) {
+      return null;
+    }
+
+    const savings = monthlyPrice * 12 - annualPrice;
+    if (savings <= 0) return null;
+
+    try {
+      const formattedSavings = new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: currencyCode,
+        currencyDisplay: 'narrowSymbol',
+        maximumFractionDigits: 0,
+      }).format(savings);
+      return `Save ${formattedSavings}`;
+    } catch {
+      return null;
+    }
   };
 
   const getBadge = (pkg: any) => {
     if (!pkg) return null;
-    return FALLBACK_DETAILS[pkg.packageType]?.badge;
+    return PLAN_DETAILS[pkg.packageType]?.badge;
   };
 
   const handleUpgrade = async () => {
-    if (!selectedPkg) {
-      Alert.alert('Error', 'No subscription package available. Please try again later.');
+    if (!selectedPkg || !getPrice(selectedPkg)) {
+      Alert.alert('Error', 'The store price is unavailable. Please try again later.');
       return;
     }
     setPurchasing(true);
@@ -138,8 +163,8 @@ export function UpgradeButton() {
         <View style={styles.optionContent}>
           <Text style={styles.planTitle}>{title}</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceText}>{price}</Text>
-            <Text style={styles.periodText}>/{getPeriod(pkg)}</Text>
+            <Text style={styles.priceText}>{price || 'Price unavailable'}</Text>
+            {price && <Text style={styles.periodText}>/{getPeriod(pkg)}</Text>}
           </View>
           {savings && <Text style={styles.savingsText}>{savings}</Text>}
         </View>
@@ -151,6 +176,8 @@ export function UpgradeButton() {
     );
   };
 
+  const canPurchase = !!selectedPkg && !!getPrice(selectedPkg);
+
   return (
     <View style={styles.container}>
       {packages.length > 0 ? (
@@ -160,17 +187,19 @@ export function UpgradeButton() {
       )}
 
       <TouchableOpacity
-        style={[styles.subscribeButton, (purchasing || !selectedPkg) && styles.buttonDisabled]}
+        style={[styles.subscribeButton, (purchasing || !canPurchase) && styles.buttonDisabled]}
         onPress={handleUpgrade}
-        disabled={purchasing || !selectedPkg}
+        disabled={purchasing || !canPurchase}
       >
         {purchasing ? (
           <ActivityIndicator color="#0A0A0A" />
         ) : (
           <Text style={styles.subscribeButtonText}>
-            {packages.length > 0
+            {canPurchase
               ? `Subscribe — ${getPrice(selectedPkg)}/${getPeriod(selectedPkg)}`
-              : 'Subscribe'}
+              : packages.length > 0
+                ? 'Price unavailable'
+                : 'Subscribe'}
           </Text>
         )}
       </TouchableOpacity>
