@@ -36,7 +36,7 @@ export default function EmailsScreen() {
     const fetchTemplates = async () => {
       try {
         // Timeout after 3 seconds
-        const timeout = new Promise((_, reject) => 
+        const timeout = new Promise<never>((_, reject) => 
           setTimeout(() => reject(new Error("Timeout")), 3000)
         );
         
