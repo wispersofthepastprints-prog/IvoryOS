@@ -117,6 +117,11 @@ export default function NewBookingScreen() {
       balanceCents = priceCents - depositCents;
     }
 
+    if (depositCents === null || balanceCents === null) {
+      Alert.alert("Check Amounts", "Enter a valid deposit and balance.");
+      return;
+    }
+
     if (depositCents < 0 || balanceCents < 0) {
       Alert.alert("Check Amounts", "Deposit and balance can't be more than the package price.");
       return;

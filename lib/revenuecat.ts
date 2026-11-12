@@ -45,7 +45,7 @@ export async function purchasePro() {
     const { customerInfo } = await Purchases.purchasePackage(monthlyPackage);
     return customerInfo;
   } catch (error) {
-    if ((error).userCancelled) {
+    if ((error as { userCancelled?: boolean }).userCancelled) {
       console.log('User cancelled purchase');
       return null;
     }
@@ -56,7 +56,7 @@ export async function purchasePro() {
 
 export async function restorePurchases() {
   try {
-    const { customerInfo } = await Purchases.restorePurchases();
+    const customerInfo = await Purchases.restorePurchases();
     return customerInfo;
   } catch (error) {
     console.error('Restore failed:', error);
@@ -66,7 +66,7 @@ export async function restorePurchases() {
 
 export async function checkProStatus() {
   try {
-    const { customerInfo } = await Purchases.getCustomerInfo();
+    const customerInfo = await Purchases.getCustomerInfo();
     const isPro = customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
     return isPro;
   } catch (error) {
