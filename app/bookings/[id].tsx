@@ -228,7 +228,7 @@ export default function BookingDetailScreen() {
       <View style={styles.card}>
         <Text style={styles.sectionLabel}>STATUS: {booking.status?.toUpperCase() || "UNKNOWN"}</Text>
 
-        {booking.status === "inquiry" && (
+        {(booking.status === "inquiry" || booking.status === "quoted") && (
           <TouchableOpacity style={styles.actionButton} onPress={() => updateStatus("contracted")}>
             <Text style={styles.actionText}>📄 Mark Contract Sent</Text>
           </TouchableOpacity>
