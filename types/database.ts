@@ -44,7 +44,6 @@ export interface Booking {
   deposit_paid: boolean;
   balance_due: number | null;
   balance_paid: boolean;
-  platform_fee_percent: number;
   created_at: string;
 }
 

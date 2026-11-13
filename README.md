@@ -35,5 +35,5 @@ npx expo start
 
 - Add New Client form
 - Add Booking Detail screen with contract/invoice/payment buttons
-- Integrate Stripe Connect for 10% platform fee
+- Integrate Stripe Connect for client payments (no platform fee)
 - Add RevenueCat for $49/mo Pro subscription
