@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Photographer's Guide — IvoryOS</title>
+<style>
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:760px;margin:0 auto;padding:24px;line-height:1.65;color:#1a1a1a;background:#F8F6F0}h1{font-size:1.8rem}h2{font-size:1.2rem;margin-top:1.7em;color:#8A6D00}a{color:#8A6D00}li{margin-bottom:.55em}.toc{background:#fff;border:1px solid #E5E5E5;border-radius:12px;padding:16px 20px;margin:20px 0}.toc ul{margin:6px 0}.step{background:#fff;border:1px solid #E5E5E5;border-radius:12px;padding:14px 18px;margin:12px 0}.muted{color:#666;font-size:.95rem}.callout{background:#FBF6E3;border-left:4px solid #C9A227;border-radius:8px;padding:12px 16px;margin:14px 0}
+</style>
+</head>
+<body>
+<h1>Photographer's Guide — IvoryOS</h1>
+<p><strong>Last updated:</strong> 14 November 2026 · For IvoryOS 1.0.16 and later</p>
+<p>IvoryOS is the quiet back office for your studio: clients, bookings, contracts, invoices, calendar and tax set-aside in one calm place. This guide takes you from first login to getting paid.</p>
+
+<div class="toc">
+<strong>Contents</strong>
+<ul>
+  <li><a href="#start">1. Getting started</a></li>
+  <li><a href="#setup">2. Three things to set up first</a></li>
+  <li><a href="#clients">3. Adding clients</a></li>
+  <li><a href="#bookings">4. Creating a booking</a></li>
+  <li><a href="#status">5. What each booking status means</a></li>
+  <li><a href="#paid">6. Getting paid (deposits &amp; balances)</a></li>
+  <li><a href="#contracts">7. Contracts &amp; emails</a></li>
+  <li><a href="#ledger">8. Invoices &amp; Ivory Ledger</a></li>
+  <li><a href="#trouble">9. If something goes wrong</a></li>
+  <li><a href="#legal">10. Your data, and getting help</a></li>
+</ul>
+</div>
+
+<h2 id="start">1. Getting started</h2>
+<p>Download IvoryOS from Google Play and sign in with your email. New accounts start on the <strong>Free</strong> plan — everything works, up to <strong>3 clients</strong>. Upgrade to <strong>Pro</strong> from the subscribe screen when you're ready; it removes the client limit and renews through Google Play until you cancel it there.</p>
+
+<h2 id="setup">2. Three things to set up first</h2>
+<div class="step"><strong>1 · Your profile.</strong> Open <strong>Settings</strong> and make sure your studio name and details are right — they appear on invoices and payment pages your clients see.</div>
+<div class="step"><strong>2 · Stripe (for getting paid).</strong> In <strong>Settings</strong>, connect your bank account through Stripe. This creates your Stripe Express account, and client payments land there. You only need to do this once — but a payment link can't be created until it's done.</div>
+<div class="step"><strong>3 · Google Calendar (optional but lovely).</strong> In <strong>Settings</strong>, connect Google Calendar and accept all the permissions. New bookings are then written straight into your calendar as events. IvoryOS writes events out only — it never reads your calendar or blocks double-bookings.</div>
+<p class="muted">If you skipped Stripe or Calendar, nothing breaks — you'll just see a gentle reminder when you reach that step.</p>
+
+<h2 id="clients">3. Adding clients</h2>
+<p>Go to <strong>Clients → Add</strong>. Name is required; email and phone are worth adding early — a client's <strong>email address is needed before you can send them a payment link</strong>. Use the partner field for couples (they'll appear as "Alex & Sam" throughout the app).</p>
+
+<h2 id="bookings">4. Creating a booking</h2>
+<p>From <strong>Bookings → New booking</strong>:</p>
+<ul>
+  <li><strong>Client</strong> — pick from your list.</li>
+  <li><strong>Location &amp; date</strong> — the event details.</li>
+  <li><strong>Package price</strong> — type dollars, e.g. <code>3200</code>.</li>
+  <li><strong>Deposit</strong> — optional; defaults to 25%. Common split: a fixed deposit like $150–$500 to hold the date.</li>
+  <li><strong>Balance</strong> — optional; defaults to the remainder.</li>
+  <li><strong>Status</strong> — where the job sits (see below). New enquiries usually start as <em>Inquiry</em>.</li>
+</ul>
+<p>Save, and the booking appears on your home screen — plus in Google Calendar if you connected it.</p>
+
+<h2 id="status">5. What each booking status means</h2>
+<p>Statuses keep everyone honest about where a job stands — and they unlock the next step:</p>
+<ul>
+  <li><strong>Inquiry</strong> — someone asked. Nothing owed, nothing promised.</li>
+  <li><strong>Quoted</strong> — you've sent a price. When the client says yes, open the booking and tap <strong>📄 Mark Contract Sent</strong>.</li>
+  <li><strong>Contracted</strong> — contract's out. Now the <strong>💰 Share Deposit Payment Link</strong> button appears: send it to lock the date with a deposit.</li>
+  <li><strong>Confirmed</strong> — deposit received (or you're otherwise confident). The job is on.</li>
+  <li><strong>Completed</strong> — shot and delivered.</li>
+</ul>
+<div class="callout"><strong>The golden path:</strong> Inquiry → Quoted → (Mark Contract Sent) → Contracted → (share deposit link) → deposit paid → Confirmed → shoot → share balance link → Completed. Money moves at exactly two points: the deposit and the balance.</div>
+
+<h2 id="paid">6. Getting paid (deposits &amp; balances)</h2>
+<p>On a <strong>Contracted</strong> or <strong>Confirmed</strong> booking with an unpaid deposit:</p>
+<ul>
+  <li>Tap <strong>💰 Share Deposit Payment Link</strong>. IvoryOS creates a secure Stripe Checkout link and opens your share sheet — send it by SMS, WhatsApp or email.</li>
+  <li>Your client opens the link and pays by card on a page branded with your studio name.</li>
+  <li>When Stripe confirms the payment, the booking flips to <strong>✅ Paid</strong> on its own — no refreshing, no marking things by hand.</li>
+  <li>After the deposit is paid, the <strong>balance link</strong> appears for the remainder.</li>
+</ul>
+<p><strong>Where the money goes:</strong> straight to your connected Stripe account, in AUD. IvoryOS charges <strong>no platform fee</strong> — the full payment reaches your account less Stripe's own processing charges. Payouts from Stripe to your bank follow Stripe's schedule (typically a few business days for a new account).</p>
+<p class="muted">Requirements, all checked for you: the booking must be Contracted or Confirmed, the client needs an email on file, and your Stripe bank connection must be complete. If any is missing, the app tells you which one.</p>
+
+<h2 id="contracts">7. Contracts &amp; emails</h2>
+<p>From a booking, prepare a contract from its real details — IvoryOS opens your email app with a pre-filled message ready to send from <em>your</em> address. The same goes for invoices and other client emails: the app drafts, you review and press send. Sent status stays visible on the booking. IvoryOS never sends anything automatically, so nothing reaches a client without your eyes on it.</p>
+
+<h2 id="ledger">8. Invoices &amp; Ivory Ledger</h2>
+<p>Create invoices from your bookings and share them the same way. <strong>Ivory Ledger</strong> keeps your tax set-aside: choose a percentage, log expenses with receipt photos, and see what's put aside at a glance. It's a record-keeping aid — not tax advice, and not an ATO determination.</p>
+
+<h2 id="trouble">9. If something goes wrong</h2>
+<ul>
+  <li><strong>"I can't see the payment link button."</strong> The booking must be <em>Contracted</em> or <em>Confirmed</em>. If it's <em>Quoted</em> or <em>Inquiry</em>, tap <strong>📄 Mark Contract Sent</strong> first. Also check the client has an email address and Stripe is connected.</li>
+  <li><strong>"My booking still says Unpaid after the client paid."</strong> Give it a moment — the paid tick arrives when Stripe's confirmation reaches the app. If it's been more than a few minutes, check your Stripe dashboard: if the payment is there, the app will catch up; if it's not, the client didn't complete checkout.</li>
+  <li><strong>"Google Calendar stopped syncing."</strong> Google occasionally revokes access. Settings → Disconnect Google Calendar → Connect again, accepting all permissions. Then re-check by making a test booking.</li>
+  <li><strong>"It says I need Pro / I've hit 3 clients."</strong> That's the free limit doing its job. Subscribe from the app; it renews through Google Play and can be cancelled there anytime.</li>
+  <li><strong>"Session expired."</strong> Sign out and back in. Your data is safe in the cloud.</li>
+  <li><strong>Still stuck?</strong> Email <a href="mailto:wispersofthepastprints@gmail.com">wispersofthepastprints@gmail.com</a> — a real human reads every message.</li>
+</ul>
+
+<h2 id="legal">10. Your data, and getting help</h2>
+<ul>
+  <li><a href="https://wispersofthepastprints-prog.github.io/IvoryOS/terms.html">Terms of Service</a></li>
+  <li><a href="https://wispersofthepastprints-prog.github.io/IvoryOS/privacy-policy.html">Privacy Policy</a></li>
+  <li><a href="https://wispersofthepastprints-prog.github.io/IvoryOS/delete-account.html">Delete your account</a></li>
+</ul>
+<p>Questions, feedback or a feature you'd love: <a href="mailto:wispersofthepastprints@gmail.com">wispersofthepastprints@gmail.com</a></p>
+<p class="muted">Made in Australia, ready for the world.</p>
+</body>
+</html>
