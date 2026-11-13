@@ -50,7 +50,7 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const { data: booking, error: bookingError } = await supabase
     .from("bookings")
-    .select("id, photographer_id, deposit_amount, balance_due, platform_fee_percent")
+    .select("id, photographer_id, deposit_amount, balance_due")
     .eq("id", bookingId)
     .eq("photographer_id", photographerId)
     .single();
@@ -61,14 +61,12 @@ serve(async (req) => {
   }
 
   const expectedAmount = paymentType === "deposit" ? booking.deposit_amount : booking.balance_due;
-  const expectedFee = Math.round(expectedAmount * ((booking.platform_fee_percent ?? 10) / 100));
   if (
     !Number.isInteger(expectedAmount) ||
     expectedAmount <= 0 ||
     session.amount_total !== expectedAmount ||
     session.currency !== "aud" ||
-    session.metadata?.expected_amount !== String(expectedAmount) ||
-    session.metadata?.platform_fee !== String(expectedFee)
+    session.metadata?.expected_amount !== String(expectedAmount)
   ) {
     console.error("Payment webhook rejected: amount or currency mismatch", { eventId: event.id });
     return json({ error: "Payment amount mismatch" }, 400);
@@ -92,11 +90,14 @@ serve(async (req) => {
   const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent);
   const destination = paymentIntent.transfer_data?.destination;
   const destinationId = typeof destination === "string" ? destination : destination?.id;
+  // IvoryOS charges no platform fee on client payments: reject any settlement
+  // that includes one, so a stale or tampered session can never skim a fee.
+  const settledFee = paymentIntent.application_fee_amount ?? 0;
   if (
     paymentIntent.status !== "succeeded" ||
     paymentIntent.amount_received !== expectedAmount ||
     paymentIntent.currency !== "aud" ||
-    paymentIntent.application_fee_amount !== expectedFee ||
+    settledFee !== 0 ||
     destinationId !== photographer.stripe_connect_account_id
   ) {
     console.error("Payment webhook rejected: settlement mismatch", { eventId: event.id });

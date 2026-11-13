@@ -64,7 +64,7 @@ serve(async (req) => {
     // The caller supplies only the booking ID and payment type.
     const { data: booking, error: bookingError } = await admin
       .from("bookings")
-      .select("id, photographer_id, package_description, deposit_amount, balance_due, deposit_paid, balance_paid, platform_fee_percent, clients(full_name, email)")
+      .select("id, photographer_id, package_description, deposit_amount, balance_due, deposit_paid, balance_paid, clients(full_name, email)")
       .eq("id", bookingId)
       .eq("photographer_id", photographer.id)
       .single();
@@ -79,11 +79,8 @@ serve(async (req) => {
       return json({ error: `This booking has no valid ${paymentType} amount` }, 400);
     }
 
-    const feePercent = booking.platform_fee_percent ?? 10;
-    if (!Number.isInteger(feePercent) || feePercent < 0 || feePercent > 100) {
-      return json({ error: "Invalid platform fee configuration" }, 500);
-    }
-    const platformFee = Math.round(amount * (feePercent / 100));
+    // No IvoryOS platform fee: the full payment (less Stripe's own processing
+    // charges, per Stripe's terms) transfers to the connected account.
     const client = Array.isArray(booking.clients) ? booking.clients[0] : booking.clients;
     const clientEmail = client?.email || undefined;
     const paymentLabel = paymentType === "deposit" ? "Deposit" : "Balance";
@@ -108,10 +105,8 @@ serve(async (req) => {
         photographer_id: photographer.id,
         payment_type: paymentType,
         expected_amount: String(amount),
-        platform_fee: String(platformFee),
       },
       payment_intent_data: {
-        application_fee_amount: platformFee,
         transfer_data: { destination: photographer.stripe_connect_account_id },
         metadata: {
           booking_id: booking.id,
