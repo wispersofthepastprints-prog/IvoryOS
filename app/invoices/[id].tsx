@@ -33,6 +33,14 @@ type Client = {
   email?: string;
 };
 
+// Store the selected local calendar day, not the previous UTC day.
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function InvoiceDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -118,7 +126,7 @@ export default function InvoiceDetailScreen() {
     if (selectedDate) setDueDate(selectedDate);
   };
 
-  const handleUpdate = async () => {
+  const handleUpdate = async (statusOverride?: string) => {
     if (!invoice || !photographerId) return;
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       Alert.alert("Invalid Amount", "Please enter a valid amount.");
@@ -132,8 +140,8 @@ export default function InvoiceDetailScreen() {
         .update({
           invoice_number: invoiceNumber.trim() || null,
           amount: parseFloat(amount),
-          status,
-          due_date: dueDate.toISOString().split("T")[0],
+          status: statusOverride || status,
+          due_date: formatLocalDate(dueDate),
           notes: notes.trim() || null,
           updated_at: new Date().toISOString(),
         })
@@ -188,7 +196,7 @@ export default function InvoiceDetailScreen() {
     }
 
     const subjectLine = `Invoice ${invoiceNumber || "#" + id.slice(0, 8)}`;
-    const body = `Hi ${client.full_name},\n\nPlease find your invoice attached.\n\nAmount: $${amount}\nDue: ${dueDate.toLocaleDateString("en-AU")}\n\nThank you,`;
+    const body = `Hi ${client.full_name},\n\nHere are your invoice details.\n\nInvoice: ${invoiceNumber || "#" + id.slice(0, 8)}\nAmount: $${amount}\nDue: ${dueDate.toLocaleDateString("en-AU")}${notes.trim() ? `\n\nNotes:\n${notes.trim()}` : ""}\n\nThank you,`;
     const mailto = `mailto:${client.email}?subject=${encodeURIComponent(subjectLine)}&body=${encodeURIComponent(body)}`;
 
     try {
@@ -285,7 +293,7 @@ export default function InvoiceDetailScreen() {
             </View>
             <Text style={styles.label}>Notes</Text>
             <TextInput style={[styles.input, styles.textArea]} value={notes} onChangeText={setNotes} multiline numberOfLines={4} textAlignVertical="top" />
-            <TouchableOpacity style={[styles.saveButton, saving && styles.disabled]} onPress={handleUpdate} disabled={saving}>
+            <TouchableOpacity style={[styles.saveButton, saving && styles.disabled]} onPress={() => handleUpdate()} disabled={saving}>
               <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Changes"}</Text>
             </TouchableOpacity>
           </>
@@ -320,9 +328,9 @@ export default function InvoiceDetailScreen() {
       {!isEditing && (
         <View style={styles.actionsCard}>
           <TouchableOpacity style={styles.actionButton} onPress={handleSend}>
-            <Text style={styles.actionButtonText}>📧 Send Invoice</Text>
+            <Text style={styles.actionButtonText}>📧 Open in Email App</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionButton, styles.markPaidButton]} onPress={() => { setStatus("paid"); handleUpdate(); }}>
+          <TouchableOpacity style={[styles.actionButton, styles.markPaidButton]} onPress={() => handleUpdate("paid")} disabled={saving}>
             <Text style={[styles.actionButtonText, styles.markPaidText]}>✓ Mark as Paid</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionButton, styles.deleteButton]} onPress={handleDelete}>

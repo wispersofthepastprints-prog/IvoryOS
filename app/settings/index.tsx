@@ -12,7 +12,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { usePurchases } from "../../hooks/usePurchases";
 import { UpgradeButton } from "../../components/UpgradeButton";
 import { useRouter, useFocusEffect } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -212,9 +211,6 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const isPro = profile?.subscription_tier === "pro";
-  const isStudio = profile?.subscription_tier === "studio";
-
   if (loading) {
     return (
       <View style={styles.container}>
@@ -324,6 +320,23 @@ export default function SettingsScreen() {
                 : "Recently"}
             </Text>
           </View>
+        </View>
+
+        {/* Legal and account data */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>LEGAL & DATA</Text>
+          <TouchableOpacity style={styles.row} onPress={() => Linking.openURL("https://wispersofthepastprints-prog.github.io/IvoryOS/privacy-policy.html")}>
+            <Text style={styles.rowLabel}>Privacy Policy</Text>
+            <Text style={styles.rowValue}>Open</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.row} onPress={() => Linking.openURL("https://wispersofthepastprints-prog.github.io/IvoryOS/terms.html")}>
+            <Text style={styles.rowLabel}>Terms of Service</Text>
+            <Text style={styles.rowValue}>Open</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.row} onPress={() => Linking.openURL("https://wispersofthepastprints-prog.github.io/IvoryOS/delete-account.html")}>
+            <Text style={styles.rowLabel}>Delete Account & Data</Text>
+            <Text style={styles.rowValue}>Open</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Logout */}

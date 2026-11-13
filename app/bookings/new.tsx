@@ -14,6 +14,14 @@ const parseDollarsToCents = (raw: string): number | null => {
   return Math.round(value * 100);
 };
 
+// Date-only booking fields must use the photographer's selected local day.
+const formatLocalDate = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function NewBookingScreen() {
   const router = useRouter();
   const [clientId, setClientId] = useState("");
@@ -150,7 +158,7 @@ export default function NewBookingScreen() {
       // Get photographer record first
       const { data: photographer } = await supabase
         .from("photographers")
-        .select("id")
+        .select("id, google_refresh_token")
         .eq("auth_id", user.id)
         .single();
 
@@ -168,7 +176,7 @@ export default function NewBookingScreen() {
         deposit_amount: depositCents,
         balance_due: balanceCents,
         package_description: packageDescription,
-        event_date: eventDate.toISOString().split("T")[0],
+        event_date: formatLocalDate(eventDate),
         status,
       });
 
@@ -176,31 +184,37 @@ export default function NewBookingScreen() {
       if (error) {
         Alert.alert("Error", error.message);
       } else {
-        // Sync to Google Calendar (optional)
-        try {
-          const { getStoredToken, createCalendarEvent } = await import("../../lib/google-calendar");
-          const googleToken = await getStoredToken();
-          if (googleToken) {
+        let calendarWarning = false;
+        if (photographer.google_refresh_token) {
+          try {
+            const { getStoredToken, createCalendarEvent } = await import("../../lib/google-calendar");
+            const googleToken = await getStoredToken();
+            if (!googleToken) throw new Error("Google Calendar access is unavailable");
+
             const { data: clientData } = await supabase
               .from("clients")
               .select("full_name")
               .eq("id", clientId)
               .single();
-
             await createCalendarEvent(googleToken, {
               summary: `Wedding: ${clientData?.full_name || "Client"}`,
               description: packageDescription,
               location: location,
-              startDate: eventDate.toISOString().split("T")[0],
-              endDate: eventDate.toISOString().split("T")[0],
+              startDate: formatLocalDate(eventDate),
+              endDate: formatLocalDate(eventDate),
             });
-            console.log("Synced to Google Calendar");
+          } catch (calendarErr) {
+            calendarWarning = true;
+            console.log("Google Calendar sync failed:", calendarErr);
           }
-        } catch (calendarErr) {
-          console.log("Google Calendar sync skipped:", calendarErr);
         }
 
-        Alert.alert("Success", "Booking saved!");
+        Alert.alert(
+          calendarWarning ? "Booking Saved" : "Success",
+          calendarWarning
+            ? "Booking saved, but Google Calendar could not be updated. Reconnect Google Calendar in Settings and add this event manually."
+            : "Booking saved!"
+        );
         router.replace("/bookings");
       }
     } catch (err: any) {
